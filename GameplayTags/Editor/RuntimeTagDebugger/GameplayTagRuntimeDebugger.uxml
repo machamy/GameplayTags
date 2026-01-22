@@ -1,0 +1,48 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="True">
+    <Style src="GameplayTagRuntimeDebugger.uss" />
+    
+    <!-- 헤더 -->
+    <ui:VisualElement class="header">
+        <ui:Label name="header-title" text="Gameplay Tag Runtime Debugger" class="header-title" />
+        <ui:Label name="header-subtitle" text="View and debug gameplay tags registered at runtime" class="header-subtitle" />
+    </ui:VisualElement>
+    
+    <!-- 플레이 모드 경고 (플레이 모드가 아닐 때만 표시) -->
+    <ui:VisualElement name="warning-container" class="warning-container" style="display: none;">
+        <ui:Label name="warning-label" text="⚠️ Only available in Play Mode" class="warning-title" />
+        <ui:Label name="warning-desc" text="Enter Play Mode to view runtime tag information." class="warning-subtitle" />
+    </ui:VisualElement>
+    
+    <!-- 메인 컨텐츠 (플레이 모드일 때만 표시) -->
+    <ui:VisualElement name="main-content" class="main-content">
+        <!-- 뷰 모드 버튼들 -->
+        <ui:VisualElement class="view-mode-buttons">
+            <ui:Button name="btn-id-sort" text="🔢 Sort by ID" class="view-mode-button view-mode-button-active" />
+            <ui:Button name="btn-string-sort" text="🔤 Sort by String" class="view-mode-button" />
+            <ui:Button name="btn-tree-mode" text="🌲 Tree Mode" class="view-mode-button" />
+        </ui:VisualElement>
+        
+        <!-- 검색 필드 -->
+        <ui:TextField name="search-field" label="🔍 Search" class="search-field" />
+        
+        <!-- 상태 라벨 -->
+        <ui:Label name="status-label" text="Loading tags..." class="status-label" />
+        
+        <!-- 태그 리스트 컨텐츠 영역 -->
+        <ui:ScrollView name="content-area" class="content-area" />
+        
+        <!-- 구분선 -->
+        <ui:VisualElement class="separator" />
+        
+        <!-- 태그 요청 테스트 섹션 -->
+        <ui:VisualElement class="request-section">
+            <ui:Label name="request-title" text="🔍 Tag Request Test" class="request-section-title" />
+            <ui:VisualElement class="request-input-row">
+                <ui:TextField name="request-field" value="e.g., Player.Health.Max" class="request-field" />
+                <ui:Button name="btn-request-tag" text="Request Tag" class="request-button" />
+            </ui:VisualElement>
+            <ui:Label name="request-result" text="" class="request-result" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
+

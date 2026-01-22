@@ -1,0 +1,434 @@
+/* 헤더 */
+.header {
+    background-color: rgb(45, 45, 48);
+    padding: 15px;
+    border-bottom-width: 2px;
+    border-bottom-color: rgb(68, 138, 255);
+}
+
+.header-title {
+    font-size: 24px;
+    -unity-font-style: bold;
+    color: rgb(255, 255, 255);
+    margin-bottom: 5px;
+    min-height: 30px;
+}
+
+.header-subtitle {
+    font-size: 12px;
+    color: rgb(180, 180, 180);
+}
+
+/* 툴바 */
+.toolbar {
+    flex-direction: row;
+    background-color: rgb(50, 50, 52);
+    padding: 8px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(30, 30, 30);
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    min-height: 40px;
+}
+
+.toolbar-button {
+    background-color: rgb(68, 138, 255);
+    color: white;
+    border-radius: 4px;
+    padding: 6px 12px;
+    margin: 2px;
+    border-width: 0;
+    font-size: 12px;
+    -unity-font-style: bold;
+    flex-shrink: 0;
+    flex-grow: 0;
+    min-width: 100px;
+    white-space: nowrap;
+}
+
+.toolbar-button:hover {
+    background-color: rgb(88, 158, 255);
+}
+
+.toolbar-button:active {
+    background-color: rgb(48, 118, 235);
+}
+
+.toolbar-button-debugger {
+    background-color: rgb(138, 68, 255);
+}
+
+.toolbar-button-debugger:hover {
+    background-color: rgb(158, 88, 255);
+}
+
+.toolbar-button-debugger:active {
+    background-color: rgb(118, 48, 235);
+}
+
+.toolbar-toggle {
+    margin-left: auto;
+    margin-right: 10px;
+    flex-shrink: 0;
+}
+
+.toolbar-dropdown {
+    min-width: 100px;
+    flex-shrink: 0;
+}
+
+/* 정렬 섹션 */
+.sort-section {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    background-color: rgb(45, 45, 48);
+    border-radius: 4px;
+}
+
+.sort-section Label {
+    color: rgb(200, 200, 200);
+    font-size: 11px;
+    min-width: 40px;
+}
+
+.sort-dropdown {
+    flex-grow: 1;
+    font-size: 11px;
+}
+
+/* 탭 컨테이너 */
+.tab-container {
+    flex-direction: column;
+    margin-top: 10px;
+}
+
+.tab-button {
+    background-color: rgb(50, 50, 52);
+    color: rgb(200, 200, 200);
+    border-width: 0;
+    border-left-width: 3px;
+    border-left-color: transparent;
+    padding: 12px 16px;
+    margin: 2px 0;
+    font-size: 13px;
+    -unity-text-align: middle-left;
+}
+
+.tab-button:hover {
+    background-color: rgb(60, 60, 62);
+}
+
+.tab-button-active {
+    background-color: rgb(45, 45, 48);
+    border-left-color: rgb(68, 138, 255);
+    color: rgb(255, 255, 255);
+    -unity-font-style: bold;
+}
+
+/* 필터 섹션 */
+.filter-section {
+    margin-top: 15px;
+    padding: 10px;
+    background-color: rgb(45, 45, 48);
+    border-radius: 4px;
+}
+
+.filter-section Toggle {
+    margin: 4px 0;
+    font-size: 11px;
+}
+
+/* 탭 컨텐츠 */
+.tab-content {
+    flex-grow: 1;
+}
+
+/* 메인 스플릿 */
+.main-split {
+    flex-grow: 1;
+    background-color: rgb(37, 37, 38);
+}
+
+/* 패널 */
+.panel {
+    padding: 10px;
+    background-color: rgb(37, 37, 38);
+}
+
+.panel-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(60, 60, 60);
+}
+
+.panel-title {
+    font-size: 16px;
+    -unity-font-style: bold;
+    color: rgb(220, 220, 220);
+}
+
+.tag-count {
+    font-size: 12px;
+    color: rgb(68, 138, 255);
+    background-color: rgb(30, 30, 32);
+    padding: 4px 8px;
+    border-radius: 10px;
+}
+
+.panel-description {
+    font-size: 11px;
+    color: rgb(160, 160, 160);
+    margin-bottom: 10px;
+    white-space: normal;
+}
+
+/* 데이터베이스 선택 */
+.database-selector {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 8px;
+    background-color: rgb(45, 45, 48);
+    border-radius: 4px;
+}
+
+.database-selector Label {
+    color: rgb(200, 200, 200);
+    margin-right: 8px;
+    min-width: 80px;
+}
+
+.database-dropdown {
+    flex-grow: 1;
+    margin-right: 8px;
+}
+
+.small-button {
+    background-color: rgb(60, 60, 62);
+    color: white;
+    border-radius: 4px;
+    padding: 4px 8px;
+    border-width: 0;
+    font-size: 11px;
+}
+
+.small-button:hover {
+    background-color: rgb(70, 70, 72);
+}
+
+/* 태그 추가 섹션 */
+.add-tag-section {
+    background-color: rgb(45, 45, 48);
+    padding: 12px;
+    margin-bottom: 10px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: rgb(60, 60, 60);
+}
+
+.section-title {
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: rgb(200, 200, 200);
+    margin-bottom: 8px;
+}
+
+.add-tag-section TextField {
+    margin-bottom: 8px;
+}
+
+.primary-button {
+    background-color: rgb(40, 167, 69);
+    color: white;
+    border-radius: 4px;
+    padding: 8px 16px;
+    margin-top: 4px;
+    border-width: 0;
+    font-size: 12px;
+    -unity-font-style: bold;
+}
+
+.primary-button:hover {
+    background-color: rgb(50, 187, 89);
+}
+
+.primary-button:active {
+    background-color: rgb(30, 147, 59);
+}
+
+.primary-button:disabled {
+    background-color: rgb(60, 60, 62);
+    color: rgb(120, 120, 120);
+}
+
+/* 태그 리스트 */
+.tag-list {
+    flex-grow: 1;
+    background-color: rgb(30, 30, 32);
+    border-radius: 4px;
+    padding: 4px;
+    margin-top: 10px;
+}
+
+/* 태그 아이템 */
+.tag-item {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    margin: 2px;
+    background-color: rgb(45, 45, 48);
+    border-radius: 3px;
+    border-left-width: 3px;
+    border-left-color: rgb(68, 138, 255);
+}
+
+.tag-item:hover {
+    background-color: rgb(55, 55, 58);
+}
+
+.tag-item-readonly {
+    border-left-color: rgb(120, 120, 120);
+    background-color: rgb(40, 40, 42);
+}
+
+.tag-item-readonly:hover {
+    background-color: rgb(45, 45, 47);
+}
+
+.tag-item-content {
+    flex-grow: 1;
+}
+
+.tag-name {
+    font-size: 12px;
+    color: rgb(220, 220, 220);
+    -unity-font-style: bold;
+    margin-bottom: 2px;
+}
+
+.tag-description {
+    font-size: 10px;
+    color: rgb(150, 150, 150);
+    white-space: normal;
+}
+
+.tag-actions {
+    flex-direction: row;
+    align-items: center;
+}
+
+.tag-button {
+    background-color: transparent;
+    border-width: 0;
+    color: rgb(180, 180, 180);
+    padding: 4px 8px;
+    margin-left: 4px;
+    font-size: 11px;
+}
+
+.tag-button:hover {
+    color: rgb(220, 220, 220);
+    background-color: rgb(60, 60, 62);
+}
+
+.tag-button-delete {
+    color: rgb(220, 80, 80);
+}
+
+.tag-button-delete:hover {
+    color: rgb(255, 100, 100);
+    background-color: rgb(80, 40, 40);
+}
+
+/* 상태 바 */
+.status-bar {
+    background-color: rgb(0, 122, 204);
+    padding: 6px 12px;
+    border-top-width: 1px;
+    border-top-color: rgb(30, 30, 30);
+}
+
+.status-text {
+    font-size: 11px;
+    color: white;
+}
+
+/* 읽기 전용 라벨 */
+.readonly-label {
+    font-size: 10px;
+    color: rgb(180, 120, 0);
+    background-color: rgb(60, 50, 30);
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-left: 8px;
+}
+
+/* 출처 라벨 */
+.source-label {
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-right: 6px;
+    -unity-font-style: bold;
+}
+
+.source-label-assembly {
+    color: rgb(180, 180, 180);
+    background-color: rgb(60, 60, 62);
+}
+
+.source-label-user {
+    color: rgb(100, 200, 100);
+    background-color: rgb(30, 60, 30);
+}
+
+.source-label-database {
+    font-size: 8px;
+    color: rgb(150, 150, 150);
+    background-color: rgb(40, 40, 42);
+    padding: 1px 4px;
+    margin-left: 4px;
+}
+
+/* 자동 생성 라벨 */
+.auto-generated-label {
+    font-size: 10px;
+    color: rgb(150, 150, 150);
+    background-color: rgb(50, 50, 52);
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-left: 8px;
+}
+
+/* 계층 구조 Foldout */
+.tag-foldout {
+    margin: 2px 0;
+    background-color: rgb(40, 40, 42);
+    border-radius: 3px;
+    padding: 4px;
+}
+
+.tag-foldout > .unity-foldout__toggle {
+    font-size: 12px;
+    color: rgb(200, 200, 200);
+    -unity-font-style: bold;
+}
+
+.tag-foldout > .unity-foldout__content {
+    margin-left: 12px;
+    padding-left: 8px;
+    border-left-width: 2px;
+    border-left-color: rgb(60, 60, 60);
+}
+
+.tag-item-hierarchical {
+    margin: 1px 0;
+    padding: 6px 10px;
+}

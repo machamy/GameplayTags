@@ -1,0 +1,16 @@
+{
+    "name": "Machamy.GameplayTags.Runtime.Example",
+    "rootNamespace": "",
+    "references": [
+        "GUID:05725d43b1607504e8715e9276531854"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

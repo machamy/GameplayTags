@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ui="UnityEngine.UIElements"
+    xmlns:uie="UnityEditor.UIElements"
+    xsi:noNamespaceSchemaLocation="../../../../UIElementsSchema/UIElements.xsd"
+>
+    <Style src="project://database/Assets/GameplayTags/Editor/TagEditorWindow/GameplayTagEditor.uss?fileID=7433441132597879392&amp;guid=44baf4ec84904bf4c8a8530776452ed6&amp;type=3#GameplayTagEditor" />
+    
+    <!-- 헤더 -->
+    <ui:VisualElement class="header">
+        <ui:Label name="header-title" text="Gameplay Tag Manager" class="header-title" />
+        <ui:Label name="header-subtitle" text="게임플레이 태그를 관리하고 코드를 생성합니다" class="header-subtitle" />
+    </ui:VisualElement>
+    
+    <!-- 툴바 -->
+    <ui:VisualElement class="toolbar">
+        <ui:VisualElement style="flex-direction: row;">
+            <ui:Button name="btn-generate-code" text="🔄 코드 생성" class="toolbar-button" />
+            <ui:Button name="btn-reload-system" text="🔃 시스템 리로드" class="toolbar-button" />
+            <ui:Button name="btn-open-debugger" text="🎮 런타임 디버거" class="toolbar-button toolbar-button-debugger" />
+        </ui:VisualElement>
+        <ui:VisualElement style="flex-direction: row;">
+            <ui:Toggle name="toggle-auto-generate" label="자동 생성" class="toolbar-toggle" />
+            <ui:DropdownField name="dropdown-language" class="toolbar-dropdown" style="min-width: 120px; margin-left: 10px;" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+    
+    <!-- 메인 컨텐츠 영역 -->
+    <ui:TwoPaneSplitView fixed-pane-initial-dimension="300" class="main-split">
+        <!-- 왼쪽: 탭 선택 -->
+        <ui:VisualElement class="panel">
+            <ui:Label text="📋 보기 모드" class="panel-title" style="margin-bottom: 10px;" />
+            
+            <!-- 탭 버튼들 -->
+            <ui:VisualElement class="tab-container">
+                <ui:Button name="btn-tab-all" text="🌐 모든 태그" class="tab-button tab-button-active" />
+                <ui:Button name="btn-tab-assembly" text="⚙️ 어셈블리 태그" class="tab-button" />
+                <ui:Button name="btn-tab-user" text="📝 사용자 정의 태그" class="tab-button" />
+            </ui:VisualElement>
+            
+            <!-- 정렬 옵션 (공통) -->
+            <ui:VisualElement class="sort-section" style="margin-top: 15px;">
+                <ui:Label text="정렬:" style="margin-right: 8px;" />
+                <ui:DropdownField name="dropdown-sort" class="sort-dropdown" />
+            </ui:VisualElement>
+            
+            <!-- 필터 옵션 (모든 태그 뷰용) -->
+            <ui:VisualElement name="filter-section" class="filter-section">
+                <ui:Label text="필터:" class="section-title" style="margin-bottom: 8px;" />
+                <ui:Toggle name="toggle-show-assembly" label="어셈블리 태그 표시" />
+                <ui:Toggle name="toggle-show-user" label="사용자 태그 표시" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        
+        <!-- 오른쪽: 컨텐츠 영역 -->
+        <ui:VisualElement class="panel">
+            <!-- 모든 태그 뷰 -->
+            <ui:VisualElement name="view-all" class="tab-content">
+                <ui:VisualElement class="panel-header">
+                    <ui:Label name="panel-title" text="🌐 모든 태그" class="panel-title" />
+                    <ui:Label name="label-all-count" text="0개" class="tag-count" />
+                </ui:VisualElement>
+                <ui:Label text="어셈블리 태그와 사용자 정의 태그를 모두 볼 수 있습니다." class="panel-description" />
+                <ui:ScrollView name="scroll-all-tags" class="tag-list" />
+            </ui:VisualElement>
+            
+            <!-- 어셈블리 태그 뷰 -->
+            <ui:VisualElement name="view-assembly" class="tab-content" style="display: none;">
+                <ui:VisualElement class="panel-header">
+                    <ui:Label name="panel-title" text="⚙️ 어셈블리 태그" class="panel-title" />
+                    <ui:Label name="label-assembly-count" text="0개" class="tag-count" />
+                </ui:VisualElement>
+                <ui:Label text="코드에서 [assembly: GameplayTagDef]로 정의된 태그입니다. 수정 불가능합니다." class="panel-description" />
+                <ui:ScrollView name="scroll-assembly-tags" class="tag-list" />
+            </ui:VisualElement>
+            
+            <!-- 사용자 정의 태그 뷰 -->
+            <ui:VisualElement name="view-user" class="tab-content" style="display: none;">
+                <ui:VisualElement class="panel-header">
+                    <ui:Label name="panel-title" text="📝 사용자 정의 태그" class="panel-title" />
+                    <ui:Label name="label-user-count" text="0개" class="tag-count" />
+                </ui:VisualElement>
+                <ui:Label text="Resources 폴더의 ScriptableObject에 저장된 태그입니다. 수정 가능합니다." class="panel-description" />
+                
+                <!-- 데이터베이스 선택 -->
+                <ui:VisualElement class="database-selector">
+                    <ui:Label text="데이터베이스:" />
+                    <ui:DropdownField name="dropdown-databases" class="database-dropdown" />
+                    <ui:Button name="btn-create-database" text="+ 새 데이터베이스" class="small-button" />
+                </ui:VisualElement>
+                
+                <!-- 태그 추가 영역 -->
+                <ui:VisualElement class="add-tag-section">
+                    <ui:Label text="새 태그 추가" class="section-title" />
+                    <ui:TextField name="field-tag-name" label="태그 이름" placeholder-text="예: Player.Health.Max" />
+                    <ui:TextField name="field-tag-description" label="설명" placeholder-text="태그 설명 (선택사항)" multiline="true" />
+                    <ui:Button name="btn-add-tag" text="➕ 태그 추가" class="primary-button" />
+                </ui:VisualElement>
+                
+                <ui:ScrollView name="scroll-user-tags" class="tag-list" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:TwoPaneSplitView>
+    
+    <!-- 상태 바 -->
+    <ui:VisualElement class="status-bar">
+        <ui:Label name="label-status" text="준비됨" class="status-text" />
+    </ui:VisualElement>
+</ui:UXML>

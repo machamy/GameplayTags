@@ -1,0 +1,24 @@
+{
+    "name": "Machamy.GameplayTags.Runtime.Netcode",
+    "rootNamespace": "",
+    "references": [
+        "Machamy.GameplayTags.Runtime",
+        "Unity.Netcode.Runtime",
+        "Unity.Multiplayer.Center.NetcodeForGameObjectsExample"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.unity.netcode.gameobjects",
+            "expression": "",
+            "define": "GAMEPLAYTAGS_USE_NETCODE"
+        }
+    ],
+    "noEngineReferences": false
+}
