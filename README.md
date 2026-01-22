@@ -1,5 +1,7 @@
 # Gameplay Tags for Unity
 
+[한국어](README_ko.md)
+
 ---
 
 ## Overview
