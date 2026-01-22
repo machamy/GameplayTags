@@ -41,6 +41,7 @@ Once created, you can open the database asset to add, modify, and delete tags th
 
 ### 2. Creating Tags via Editor UI
 ![Editor Placeholder](Documentation~/editor.png)
+![Debugger Placeholder](Documentation~/debugger.png)
 Click the **Gameplay Tags** button in Unity's top menu bar to open the tag editor window.
 
 This window allows you to directly create and manage tags, as well as view all tags registered at runtime.
@@ -128,30 +129,22 @@ The main API for working with sets of tags. Provides methods to add, remove, que
 
 ### Network Support (Netcode for GameObjects)
 
-`GameplayTag` and `GameplayTagContainer` implement `INetworkSerializable` for use with Unity Netcode for GameObjects (NGO).
+The `GameplayTag` system provides specialized types and containers designed for efficient synchronization within Unity Netcode for GameObjects (NGO).
 
-```csharp
-using Unity.Netcode;
-using Machamy.GameplayTags.Runtime;
+#### **Supported Types**
 
-public struct MyNetworkData : INetworkSerializable
-{
-    public GameplayTag statusTag;
-    public GameplayTagContainer activeTags;
-    
-    public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
-    {
-        serializer.SerializeValue(ref statusTag);
-        serializer.SerializeValue(ref activeTags);
-    }
-}
-```
+* **`GameplayTagReference` (struct)**: A lightweight wrapper that serializes a `GameplayTag` as a 4-byte integer ID. Implements `INetworkSerializable`, making it ideal for RPC parameters or as a member of other networked structures.
+* **`NetworkGameplayTagContainer` (class)**: A custom network variable inheriting from `NetworkVariableBase`.
+* **Delta Replication**: Instead of sending the entire container, it transmits only the **incremental changes** (Add, Remove, or Value updates), significantly optimizing network bandwidth.
+* **Counter-Based System**: Supports stacking multiple instances of the same tag, syncing the exact count of each tag across the network.
+* **Event-Driven**: Provides granular callbacks like `OnTagCountChanged` for reactive gameplay logic on clients.
 
-#### Important Notes
 
-* Dynamically created tags during gameplay may not sync between clients
-* All clients must use the same game version with identical tag databases
-* Network serialization uses internal tag IDs, making it fast and efficient
+
+#### **Important Notes**
+
+* **Database Consistency**: All clients must use an identical tag database with matching IDs to ensure correct synchronization.
+* **Authority Model**: Follows standard `NetworkVariable` permissions. It is highly recommended to modify tags on the server and use the container for read-only synchronization on clients.
 
 ---
 

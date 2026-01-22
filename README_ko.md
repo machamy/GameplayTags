@@ -127,32 +127,30 @@ Unity 에디터 상단 메뉴바에서 **Gameplay Tags** 버튼을 클릭하여 
 
 ---
 
+작성해주신 리드미 초안은 기본적인 내용을 잘 담고 있지만, 제공해주신 코드가 **단순한 직렬화 이상의 최적화 기능(Delta Compression)**을 포함하고 있기 때문에 그 강점을 더 명확히 드러내도록 수정하는 것이 좋습니다.
+
+특히 `NetworkGameplayTagContainer`가 `NetworkVariableBase`를 상속받아 **리스트 형태의 변화량만 전송**한다는 점을 강조하는 것이 핵심입니다.
+
+---
+
 ### 네트워크 지원 (Netcode for GameObjects)
 
-`GameplayTag`와 `GameplayTagContainer`는 Unity Netcode for GameObjects (NGO)와 함께 사용할 수 있도록 `INetworkSerializable`을 구현합니다.
+`GameplayTag` 시스템은 Unity Netcode for GameObjects(NGO) 환경에서 효율적인 동기화를 지원하기 위해 전용 타입과 컨테이너를 제공합니다.
 
-```csharp
-using Unity.Netcode;
-using Machamy.GameplayTags.Runtime;
+#### **제공되는 타입**
 
-public struct MyNetworkData : INetworkSerializable
-{
-    public GameplayTag statusTag;
-    public GameplayTagContainer activeTags;
-    
-    public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
-    {
-        serializer.SerializeValue(ref statusTag);
-        serializer.SerializeValue(ref activeTags);
-    }
-}
-```
+* **`GameplayTagReference` (struct)**: `GameplayTag`를 4바이트 정수(`int`)로 관리하며 `INetworkSerializable`을 구현합니다. RPC의 매개변수나 다른 네트워크 구조체의 멤버로 사용하기 적합합니다.
+* **`NetworkGameplayTagContainer` (class)**: NGO의 `NetworkVariableBase`를 상속받은 커스텀 네트워크 변수입니다.
+* **델타 동기화(Delta Replication)**: 컨테이너 내의 모든 태그를 매번 전송하지 않고, 추가/삭제/변경 등 **변경된 데이터만** 전송하여 네트워크 대역폭을 획기적으로 줄입니다.
+* **카운터 기반**: 동일한 태그가 중첩될 수 있는 환경을 지원하며, 각 태그의 개수를 개별적으로 동기화합니다.
+* **이벤트 기반**: `OnTagCountChanged` 이벤트를 통해 클라이언트 측에서 즉각적인 UI/이펙트 반응을 구현할 수 있습니다.
 
-#### 주의사항
 
-* 게임 중 동적으로 생성된 태그는 클라이언트 간 동기화되지 않을 수 있습니다
-* 모든 클라이언트가 동일한 태그 데이터베이스를 가진 동일한 게임 버전을 사용해야 합니다
-* 네트워크 직렬화는 태그의 내부 ID를 사용하므로 빠르고 효율적입니다
+#### **주의사항**
+
+* **태그 데이터베이스 일치**: 모든 클라이언트는 동일한 태그 ID 매핑을 가진 데이터베이스를 공유해야 합니다. (버전 관리 필수)
+* **서버 권한**: 기본적으로 `NetworkVariable`의 규칙을 따르며, 서버에서만 수정하고 클라이언트는 읽기 전용으로 구독하는 방식을 권장합니다.
+
 
 ---
 
