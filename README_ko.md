@@ -127,12 +127,6 @@ Unity 에디터 상단 메뉴바에서 **Gameplay Tags** 버튼을 클릭하여 
 
 ---
 
-작성해주신 리드미 초안은 기본적인 내용을 잘 담고 있지만, 제공해주신 코드가 **단순한 직렬화 이상의 최적화 기능(Delta Compression)**을 포함하고 있기 때문에 그 강점을 더 명확히 드러내도록 수정하는 것이 좋습니다.
-
-특히 `NetworkGameplayTagContainer`가 `NetworkVariableBase`를 상속받아 **리스트 형태의 변화량만 전송**한다는 점을 강조하는 것이 핵심입니다.
-
----
-
 ### 네트워크 지원 (Netcode for GameObjects)
 
 `GameplayTag` 시스템은 Unity Netcode for GameObjects(NGO) 환경에서 효율적인 동기화를 지원하기 위해 전용 타입과 컨테이너를 제공합니다.
