@@ -227,11 +227,49 @@ if (container.HasTagIncludeChildren(damageTag))
 
 ## 크레딧
 
-이 프로젝트는 [BandoWare/GameplayTags](https://github.com/BandoWare/GameplayTags)에서 영감을 받아 개발되었습니다.
+이 프로젝트는 [BandoWare/GameplayTags](https://github.com/BandoWare/GameplayTags)의 개념과 구조를 기반으로 **재구현 및 개조**한 것입니다.
+
+코드베이스는 완전히 새로 작성되었으며, 원본의 런타임 구현 대신 **Roslyn Source Generator**를 사용하도록 설계되었습니다.
+
+### 원본 프로젝트 정보
+* **원본 프로젝트:** [GameplayTags](https://github.com/BandoWare/GameplayTags)
+* **원본 작성자:** BandoWare
+* **원본 라이선스:** [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+* **수정 사항:** 코드는 원본의 런타임 구현 대신 Roslyn Source Generator를 활용하여 완전히 새로 작성되었습니다.
 
 ---
 
 ## 라이선스
 
-이 프로젝트는 Creative Commons Attribution 4.0 International (CC BY 4.0) 라이선스에 따라 배포됩니다. 자세한 내용은 [LICENSE](License.md) 파일을 참조하세요.
+### MIT License
+
+**Copyright (c) 2026 Machamy**
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+자세한 내용은 [LICENSE.md](License.md) 파일을 참조하세요.
+
+### Attribution Notice (원본 저작물)
+
+이 프로젝트는 **BandoWare**의 **GameplayTags**의 개념과 구조를 기반으로 한 **재구현** 및 개조입니다.
+
+코드베이스는 새로 작성되었지만, 기본 설계는 **Creative Commons Attribution 4.0 International License (CC BY 4.0)** 하에 라이선스된 원본 저작물에서 파생되었습니다.
+
+CC BY 4.0 라이선스 사본을 보려면 http://creativecommons.org/licenses/by/4.0/ 를 방문하세요.
 
