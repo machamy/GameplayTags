@@ -37,11 +37,10 @@ Create a Tag Database through Unity's menu: `Assets/Create/Gameplay Tags/Tag Dat
 
 Once created, you can open the database asset to add, modify, and delete tags through the inspector interface.
 
-![Editor Placeholder](Documentation~/Images/Placeholder.png)
-*[Tag Editor Screenshot Location]*
+
 
 ### 2. Creating Tags via Editor UI
-
+![Editor Placeholder](Documentation~/editor.png)
 Click the **Gameplay Tags** button in Unity's top menu bar to open the tag editor window.
 
 This window allows you to directly create and manage tags, as well as view all tags registered at runtime.

@@ -37,11 +37,11 @@ Unity 에디터에서 `Assets/Create/Gameplay Tags/Tag Database`를 통해 태�
 
 생성된 데이터베이스 에셋을 열면 태그를 추가, 수정, 삭제할 수 있는 인터페이스가 표시됩니다.
 
-![Editor Placeholder](Documentation~/Images/Placeholder.png)
-*[태그 에디터 스크린샷 위치]*
+
 
 ### 2. 에디터 UI를 통한 태그 생성
-
+![Editor Placeholder](Documentation~/editor.png)
+![Debugger Placeholder](Documentation~/debugger.png)
 Unity 에디터 상단 메뉴바에서 **Gameplay Tags** 버튼을 클릭하여 태그 에디터 창을 열 수 있습니다.
 
 이 창에서 태그를 직접 생성하고 관리할 수 있으며, 런타임에 등록된 모든 태그를 확인할 수 있습니다.
