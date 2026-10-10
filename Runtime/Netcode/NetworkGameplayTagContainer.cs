@@ -1,6 +1,4 @@
-﻿
-
-#if GAMEPLAYTAGS_USE_NETCODE
+﻿#if GAMEPLAYTAGS_USE_NETCODE
 using System;
 using System.Collections.Generic;
 using Unity.Netcode;
@@ -45,7 +43,7 @@ namespace Machamy.GameplayTags.Runtime.Netcode
     /// }
     /// </code>
     /// </example>
-    public class NetworkGameplayTagContainer : NetworkVariableBase, IGameplayTagContainer
+    public class NetworkGameplayTagContainer : NetworkVariableBase, IGameplayTagContainer, IReadOnlyGameplayTagContainer
     {
         /// <summary>
         /// 태그 카운트 엔트리 구조체
@@ -63,7 +61,7 @@ namespace Machamy.GameplayTags.Runtime.Netcode
 
             public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
             {
-                int tagId = Tag.RawTagId;
+                int tagId = Tag.InternalTagID;
                 serializer.SerializeValue(ref tagId);
                 serializer.SerializeValue(ref Count);
                 
@@ -112,9 +110,12 @@ namespace Machamy.GameplayTags.Runtime.Netcode
             public TagCountEntry Value;
         }
 
-        private List<TagCountEntry> _list = new List<TagCountEntry>();
-        private List<ListEvent> _dirtyEvents = new List<ListEvent>();
+        private readonly List<ListEvent> _dirtyEvents = new List<ListEvent>();
         private readonly Dictionary<GameplayTag, int> _cachedTagCounts = new Dictionary<GameplayTag, int>();
+        private readonly Dictionary<GameplayTag, int> _implicitTagCounts = new Dictionary<GameplayTag, int>();
+        private readonly Dictionary<GameplayTag, Action<GameplayTagContainerEvent>> _implicitTagEventHandlers = new();
+        private readonly Dictionary<GameplayTag, Action<GameplayTagContainerEvent>> _explicitTagEventHandlers = new();
+        private readonly Queue<GameplayTagContainerEvent> _tagEventQueue = new();
 
         /// <summary>
         /// 리스트 변경 이벤트 델리게이트
@@ -125,6 +126,16 @@ namespace Machamy.GameplayTags.Runtime.Netcode
         /// 리스트 변경 이벤트
         /// </summary>
         public event OnListChangedDelegate OnListChanged;
+
+        /// <summary>
+        /// 명시적 태그 전역 구독 이벤트입니다.
+        /// </summary>
+        public event Action<GameplayTagContainerEvent> OnExplicitCountChanged;
+
+        /// <summary>
+        /// 묵시적 태그 전역 구독 이벤트입니다.
+        /// </summary>
+        public event Action<GameplayTagContainerEvent> OnImplicitCountChanged;
 
         /// <summary>
         /// 태그 개수 변경 이벤트 (하위 호환성)
@@ -163,9 +174,69 @@ namespace Machamy.GameplayTags.Runtime.Netcode
         }
 
         /// <summary>
-        /// 리스트 아이템 개수
+        /// 엔트리 개수 (명시적 태그 개수)
         /// </summary>
-        public int Count => _list.Count;
+        public int Count => _cachedTagCounts.Count;
+
+        /// <summary>
+        /// 특정 태그의 묵시적(Implicit) 변화를 구독합니다.
+        /// </summary>
+        public void RegisterImplicitTagEvent(GameplayTag tag, Action<GameplayTagContainerEvent> callback)
+        {
+            if (!_implicitTagEventHandlers.ContainsKey(tag))
+            {
+                _implicitTagEventHandlers[tag] = null;
+            }
+
+            _implicitTagEventHandlers[tag] += callback;
+        }
+
+        public void UnregisterImplicitTagEvent(GameplayTag tag, Action<GameplayTagContainerEvent> callback)
+        {
+            if (!_implicitTagEventHandlers.TryGetValue(tag, out Action<GameplayTagContainerEvent> handler))
+            {
+                return;
+            }
+
+            handler -= callback;
+            if (handler == null)
+            {
+                _implicitTagEventHandlers.Remove(tag);
+                return;
+            }
+
+            _implicitTagEventHandlers[tag] = handler;
+        }
+
+        /// <summary>
+        /// 특정 태그의 명시적(Explicit) 변화를 구독합니다.
+        /// </summary>
+        public void RegisterExplicitTagEvent(GameplayTag tag, Action<GameplayTagContainerEvent> callback)
+        {
+            if (!_explicitTagEventHandlers.ContainsKey(tag))
+            {
+                _explicitTagEventHandlers[tag] = null;
+            }
+
+            _explicitTagEventHandlers[tag] += callback;
+        }
+
+        public void UnregisterExplicitTagEvent(GameplayTag tag, Action<GameplayTagContainerEvent> callback)
+        {
+            if (!_explicitTagEventHandlers.TryGetValue(tag, out Action<GameplayTagContainerEvent> handler))
+            {
+                return;
+            }
+
+            handler -= callback;
+            if (handler == null)
+            {
+                _explicitTagEventHandlers.Remove(tag);
+                return;
+            }
+
+            _explicitTagEventHandlers[tag] = handler;
+        }
 
         private void OnListEventOccurred(ListEvent changeEvent)
         {
@@ -175,86 +246,211 @@ namespace Machamy.GameplayTags.Runtime.Netcode
             {
                 case EventType.Add:
                 case EventType.Value:
-                    {
-                        var entry = changeEvent.Value;
-                        int oldCount = _cachedTagCounts.ContainsKey(entry.Tag) ? _cachedTagCounts[entry.Tag] : 0;
-                        
-                        if (entry.Count > 0)
-                        {
-                            _cachedTagCounts[entry.Tag] = entry.Count;
-                        }
-                        else
-                        {
-                            _cachedTagCounts.Remove(entry.Tag);
-                        }
-
-                        OnTagCountChanged?.Invoke(new TagCountChangeEvent
-                        {
-                            Tag = entry.Tag,
-                            OldCount = oldCount,
-                            NewCount = entry.Count
-                        });
-                    }
+                    ApplyExplicitCount(changeEvent.Value.Tag, changeEvent.Value.Count);
+                    BroadcastTagEvents();
                     break;
 
                 case EventType.Remove:
-                    {
-                        var entry = changeEvent.Value;
-                        int oldCount = _cachedTagCounts.ContainsKey(entry.Tag) ? _cachedTagCounts[entry.Tag] : 0;
-                        _cachedTagCounts.Remove(entry.Tag);
-
-                        OnTagCountChanged?.Invoke(new TagCountChangeEvent
-                        {
-                            Tag = entry.Tag,
-                            OldCount = oldCount,
-                            NewCount = 0
-                        });
-                    }
+                    ApplyExplicitCount(changeEvent.Value.Tag, 0);
+                    BroadcastTagEvents();
                     break;
 
                 case EventType.Clear:
-                    {
-                        var oldCounts = new Dictionary<GameplayTag, int>(_cachedTagCounts);
-                        _cachedTagCounts.Clear();
-
-                        foreach (var kvp in oldCounts)
-                        {
-                            OnTagCountChanged?.Invoke(new TagCountChangeEvent
-                            {
-                                Tag = kvp.Key,
-                                OldCount = kvp.Value,
-                                NewCount = 0
-                            });
-                        }
-                    }
+                    ClearAllTagCountsWithEvents();
+                    BroadcastTagEvents();
                     break;
 
                 case EventType.Full:
-                    SyncCacheFromList();
+                    RebuildImplicitCacheFromExplicit();
                     break;
             }
         }
 
-        private void SyncCacheFromList()
+        private void RebuildImplicitCacheFromExplicit()
         {
-            _cachedTagCounts.Clear();
-            foreach (var entry in _list)
+            _implicitTagCounts.Clear();
+            foreach (KeyValuePair<GameplayTag, int> kvp in _cachedTagCounts)
             {
-                if (entry.Count > 0)
+                if (kvp.Value > 0)
                 {
-                    _cachedTagCounts[entry.Tag] = entry.Count;
+                    AddImplicitTagCounts(kvp.Key, kvp.Value, false);
+                }
+            }
+
+            ClearTagEvents();
+        }
+
+        private void ApplyExplicitCount(GameplayTag tag, int newCount)
+        {
+            if (!tag.IsValid || tag.IsNone)
+            {
+                return;
+            }
+
+            int oldCount = _cachedTagCounts.TryGetValue(tag, out int existingCount) ? existingCount : 0;
+            if (oldCount == newCount)
+            {
+                return;
+            }
+
+            if (newCount > 0)
+            {
+                _cachedTagCounts[tag] = newCount;
+            }
+            else
+            {
+                _cachedTagCounts.Remove(tag);
+                newCount = 0;
+            }
+
+            OnTagCountChanged?.Invoke(new TagCountChangeEvent
+            {
+                Tag = tag,
+                OldCount = oldCount,
+                NewCount = newCount
+            });
+
+            EnqueueTagEvent(new GameplayTagContainerEvent
+            {
+                Type = newCount > oldCount ? GameplayTagContainerEvent.EventType.Added : GameplayTagContainerEvent.EventType.Removed,
+                TagGroup = GameplayTagContainerEvent.TagType.Explicit,
+                Tag = tag,
+                PreviousCount = oldCount,
+                NewCount = newCount
+            });
+
+            int delta = newCount - oldCount;
+            if (delta > 0)
+            {
+                AddImplicitTagCounts(tag, delta, true);
+            }
+            else if (delta < 0)
+            {
+                RemoveImplicitTagCounts(tag, -delta, true);
+            }
+        }
+
+        private void ClearAllTagCountsWithEvents()
+        {
+            if (_cachedTagCounts.Count == 0)
+            {
+                _implicitTagCounts.Clear();
+                return;
+            }
+
+            var tagsToClear = new List<KeyValuePair<GameplayTag, int>>(_cachedTagCounts);
+            for (int i = 0; i < tagsToClear.Count; i++)
+            {
+                KeyValuePair<GameplayTag, int> entry = tagsToClear[i];
+                ApplyExplicitCount(entry.Key, 0);
+            }
+        }
+
+        private void AddImplicitTagCounts(GameplayTag tag, int amount, bool enqueueEvent)
+        {
+            if (amount <= 0)
+            {
+                return;
+            }
+
+            GameplayTag current = tag;
+            while (current.IsValid && !current.IsNone)
+            {
+                int previousCount = _implicitTagCounts.TryGetValue(current, out int existingCount) ? existingCount : 0;
+                int newCount = previousCount + amount;
+                _implicitTagCounts[current] = newCount;
+
+                if (enqueueEvent)
+                {
+                    EnqueueTagEvent(new GameplayTagContainerEvent
+                    {
+                        Type = GameplayTagContainerEvent.EventType.Added,
+                        TagGroup = GameplayTagContainerEvent.TagType.Implicit,
+                        Tag = current,
+                        PreviousCount = previousCount,
+                        NewCount = newCount
+                    });
+                }
+
+                current = current.ParentTag;
+            }
+        }
+
+        private void RemoveImplicitTagCounts(GameplayTag tag, int amount, bool enqueueEvent)
+        {
+            if (amount <= 0)
+            {
+                return;
+            }
+
+            GameplayTag current = tag;
+            while (current.IsValid && !current.IsNone)
+            {
+                if (!_implicitTagCounts.TryGetValue(current, out int previousCount))
+                {
+                    current = current.ParentTag;
+                    continue;
+                }
+
+                int newCount = previousCount - amount;
+                if (newCount > 0)
+                {
+                    _implicitTagCounts[current] = newCount;
+                }
+                else
+                {
+                    _implicitTagCounts.Remove(current);
+                    newCount = 0;
+                }
+
+                if (enqueueEvent)
+                {
+                    EnqueueTagEvent(new GameplayTagContainerEvent
+                    {
+                        Type = GameplayTagContainerEvent.EventType.Removed,
+                        TagGroup = GameplayTagContainerEvent.TagType.Implicit,
+                        Tag = current,
+                        PreviousCount = previousCount,
+                        NewCount = newCount
+                    });
+                }
+
+                current = current.ParentTag;
+            }
+        }
+
+        private void EnqueueTagEvent(GameplayTagContainerEvent tagEvent)
+        {
+            _tagEventQueue.Enqueue(tagEvent);
+        }
+
+        private void BroadcastTagEvents()
+        {
+            while (_tagEventQueue.Count > 0)
+            {
+                GameplayTagContainerEvent tagEvent = _tagEventQueue.Dequeue();
+                if (tagEvent.TagGroup == GameplayTagContainerEvent.TagType.Explicit)
+                {
+                    OnExplicitCountChanged?.Invoke(tagEvent);
+                    if (_explicitTagEventHandlers.TryGetValue(tagEvent.Tag, out Action<GameplayTagContainerEvent> explicitHandler))
+                    {
+                        explicitHandler?.Invoke(tagEvent);
+                    }
+
+                    continue;
+                }
+
+                OnImplicitCountChanged?.Invoke(tagEvent);
+                if (_implicitTagEventHandlers.TryGetValue(tagEvent.Tag, out Action<GameplayTagContainerEvent> implicitHandler))
+                {
+                    implicitHandler?.Invoke(tagEvent);
                 }
             }
         }
 
-        private int FindEntryIndex(GameplayTag tag)
+        private void ClearTagEvents()
         {
-            for (int i = 0; i < _list.Count; i++)
-            {
-                if (_list[i].Tag.Equals(tag))
-                    return i;
-            }
-            return -1;
+            _tagEventQueue.Clear();
         }
 
         #region IGameplayTagContainer 구현
@@ -262,38 +458,23 @@ namespace Machamy.GameplayTags.Runtime.Netcode
         public bool AddTag(GameplayTag tag)
         {
             if (!tag.IsValid)
+            {
                 return false;
+            }
 
-            int currentCount = CountTag(tag);
+            int currentCount = CountTagExact(tag);
             int newCount = currentCount + 1;
-            int index = FindEntryIndex(tag);
-            
-            var newEntry = new TagCountEntry(tag, newCount);
-            if (index >= 0)
+            EventType eventType = currentCount == 0 ? EventType.Add : EventType.Value;
+
+            var changeEvent = new ListEvent
             {
-                _list[index] = newEntry;
-                var changeEvent = new ListEvent
-                {
-                    Type = EventType.Value,
-                    Index = index,
-                    Value = newEntry
-                };
-                _dirtyEvents.Add(changeEvent);
-                OnListEventOccurred(changeEvent);
-            }
-            else
-            {
-                _list.Add(newEntry);
-                var changeEvent = new ListEvent
-                {
-                    Type = EventType.Add,
-                    Index = _list.Count - 1,
-                    Value = newEntry
-                };
-                _dirtyEvents.Add(changeEvent);
-                OnListEventOccurred(changeEvent);
-            }
-            
+                Type = eventType,
+                Index = -1,
+                Value = new TagCountEntry(tag, newCount)
+            };
+
+            _dirtyEvents.Add(changeEvent);
+            OnListEventOccurred(changeEvent);
             MarkNetworkBehaviourDirty();
             return true;
         }
@@ -301,71 +482,51 @@ namespace Machamy.GameplayTags.Runtime.Netcode
         public bool AddTagUnique(GameplayTag tag)
         {
             if (!tag.IsValid)
+            {
                 return false;
+            }
 
-            if (HasTag(tag))
+            if (HasTagExact(tag))
+            {
                 return false;
+            }
 
-            var newEntry = new TagCountEntry(tag, 1);
-            _list.Add(newEntry);
-            
             var changeEvent = new ListEvent
             {
                 Type = EventType.Add,
-                Index = _list.Count - 1,
-                Value = newEntry
+                Index = -1,
+                Value = new TagCountEntry(tag, 1)
             };
+
             _dirtyEvents.Add(changeEvent);
             OnListEventOccurred(changeEvent);
             MarkNetworkBehaviourDirty();
-            
             return true;
         }
 
         public bool RemoveTagOnce(GameplayTag tag)
         {
             if (!tag.IsValid)
+            {
                 return false;
+            }
 
-            int currentCount = CountTag(tag);
+            int currentCount = CountTagExact(tag);
             if (currentCount <= 0)
+            {
                 return false;
+            }
 
             int newCount = currentCount - 1;
-            int index = FindEntryIndex(tag);
-
-            if (index < 0)
-                return false;
-
-            if (newCount > 0)
+            var changeEvent = new ListEvent
             {
-                var newEntry = new TagCountEntry(tag, newCount);
-                _list[index] = newEntry;
-                
-                var changeEvent = new ListEvent
-                {
-                    Type = EventType.Value,
-                    Index = index,
-                    Value = newEntry
-                };
-                _dirtyEvents.Add(changeEvent);
-                OnListEventOccurred(changeEvent);
-            }
-            else
-            {
-                var oldEntry = _list[index];
-                _list.RemoveAt(index);
-                
-                var changeEvent = new ListEvent
-                {
-                    Type = EventType.Remove,
-                    Index = index,
-                    Value = oldEntry
-                };
-                _dirtyEvents.Add(changeEvent);
-                OnListEventOccurred(changeEvent);
-            }
-            
+                Type = newCount > 0 ? EventType.Value : EventType.Remove,
+                Index = -1,
+                Value = new TagCountEntry(tag, newCount > 0 ? newCount : currentCount)
+            };
+
+            _dirtyEvents.Add(changeEvent);
+            OnListEventOccurred(changeEvent);
             MarkNetworkBehaviourDirty();
             return true;
         }
@@ -373,66 +534,50 @@ namespace Machamy.GameplayTags.Runtime.Netcode
         public bool RemoveTagAll(GameplayTag tag)
         {
             if (!tag.IsValid)
+            {
                 return false;
+            }
 
-            int index = FindEntryIndex(tag);
-            if (index < 0)
+            int currentCount = CountTagExact(tag);
+            if (currentCount <= 0)
+            {
                 return false;
+            }
 
-            var oldEntry = _list[index];
-            _list.RemoveAt(index);
-            
             var changeEvent = new ListEvent
             {
                 Type = EventType.Remove,
-                Index = index,
-                Value = oldEntry
+                Index = -1,
+                Value = new TagCountEntry(tag, currentCount)
             };
+
             _dirtyEvents.Add(changeEvent);
             OnListEventOccurred(changeEvent);
             MarkNetworkBehaviourDirty();
-            
             return true;
         }
 
         public bool HasTag(GameplayTag tag)
         {
-            return _cachedTagCounts.ContainsKey(tag) && _cachedTagCounts[tag] > 0;
+            return CountTag(tag) > 0;
+        }
+        
+        public bool HasTagExact(GameplayTag tag)
+        {
+            return _cachedTagCounts.TryGetValue(tag, out int count) && count > 0;
         }
 
         public int CountTag(GameplayTag tag)
         {
-            return _cachedTagCounts.ContainsKey(tag) ? _cachedTagCounts[tag] : 0;
+            return _implicitTagCounts.TryGetValue(tag, out int count) ? count : 0;
         }
-
-        public bool HasTagIncludeChildren(GameplayTag tag)
+        
+        public int CountTagExact(GameplayTag tag)
         {
-            if (HasTag(tag))
-                return true;
-
-            foreach (var kvp in _cachedTagCounts)
-            {
-                if (kvp.Value > 0 && kvp.Key.IsChildOf(tag))
-                    return true;
-            }
-            return false;
+            return _cachedTagCounts.TryGetValue(tag, out int count) ? count : 0;
         }
 
-        public int CountTagIncludeChildren(GameplayTag tag)
-        {
-            int count = CountTag(tag);
-
-            foreach (var kvp in _cachedTagCounts)
-            {
-                if (kvp.Key.IsChildOf(tag))
-                {
-                    count += kvp.Value;
-                }
-            }
-            return count;
-        }
-
-        public bool HasAnyTags(IGameplayTagContainer otherContainer)
+        public bool HasAnyTag(IReadOnlyGameplayTagContainer otherContainer)
         {
             if (otherContainer == null)
                 return false;
@@ -444,8 +589,21 @@ namespace Machamy.GameplayTags.Runtime.Netcode
             }
             return false;
         }
+        
+        public bool HasAnyTagExact(IReadOnlyGameplayTagContainer otherContainer)
+        {
+            if (otherContainer == null)
+                return false;
 
-        public bool HasAllTags(IGameplayTagContainer otherContainer)
+            foreach (var tag in otherContainer.GetAllTags())
+            {
+                if (HasTagExact(tag))
+                    return true;
+            }
+            return false;
+        }
+
+        public bool HasAllTags(IReadOnlyGameplayTagContainer otherContainer)
         {
             if (otherContainer == null)
                 return false;
@@ -457,23 +615,38 @@ namespace Machamy.GameplayTags.Runtime.Netcode
             }
             return true;
         }
+        
+        public bool HasAllTagsExact(IReadOnlyGameplayTagContainer otherContainer)
+        {
+            if (otherContainer == null)
+                return false;
+
+            foreach (var tag in otherContainer.GetAllTags())
+            {
+                if (!HasTagExact(tag))
+                    return false;
+            }
+            return true;
+        }
+
 
         public void ClearTags()
         {
-            if (_list.Count > 0)
+            if (_cachedTagCounts.Count <= 0)
             {
-                _list.Clear();
-                
-                var changeEvent = new ListEvent
-                {
-                    Type = EventType.Clear,
-                    Index = -1,
-                    Value = default
-                };
-                _dirtyEvents.Add(changeEvent);
-                OnListEventOccurred(changeEvent);
-                MarkNetworkBehaviourDirty();
+                return;
             }
+
+            var changeEvent = new ListEvent
+            {
+                Type = EventType.Clear,
+                Index = -1,
+                Value = default
+            };
+
+            _dirtyEvents.Add(changeEvent);
+            OnListEventOccurred(changeEvent);
+            MarkNetworkBehaviourDirty();
         }
 
         public List<GameplayTag> GetAllTags()
@@ -500,9 +673,12 @@ namespace Machamy.GameplayTags.Runtime.Netcode
 
         public override void Dispose()
         {
-            _list?.Clear();
-            _dirtyEvents?.Clear();
+            _dirtyEvents.Clear();
             _cachedTagCounts.Clear();
+            _implicitTagCounts.Clear();
+            _implicitTagEventHandlers.Clear();
+            _explicitTagEventHandlers.Clear();
+            ClearTagEvents();
             base.Dispose();
         }
 
@@ -521,19 +697,14 @@ namespace Machamy.GameplayTags.Runtime.Netcode
 
             // Delta 이벤트 전송
             writer.WriteValueSafe((ushort)_dirtyEvents.Count);
-            foreach (var evt in _dirtyEvents)
+            foreach (ListEvent evt in _dirtyEvents)
             {
                 writer.WriteValueSafe(evt.Type);
                 switch (evt.Type)
                 {
                     case EventType.Add:
-                        SerializeTagCountEntry(writer, evt.Value);
-                        break;
                     case EventType.Remove:
-                        SerializeTagCountEntry(writer, evt.Value);
-                        break;
                     case EventType.Value:
-                        writer.WriteValueSafe(evt.Index);
                         SerializeTagCountEntry(writer, evt.Value);
                         break;
                     case EventType.Clear:
@@ -545,143 +716,108 @@ namespace Machamy.GameplayTags.Runtime.Netcode
 
         public override void WriteField(FastBufferWriter writer)
         {
-            writer.WriteValueSafe((ushort)_list.Count);
-            foreach (var entry in _list)
+            writer.WriteValueSafe((ushort)_cachedTagCounts.Count);
+            foreach (KeyValuePair<GameplayTag, int> kvp in _cachedTagCounts)
             {
-                SerializeTagCountEntry(writer, entry);
+                SerializeTagCountEntry(writer, new TagCountEntry(kvp.Key, kvp.Value));
             }
         }
 
         public override void ReadField(FastBufferReader reader)
         {
-            _list.Clear();
+            _cachedTagCounts.Clear();
+            _implicitTagCounts.Clear();
+            ClearTagEvents();
+
             reader.ReadValueSafe(out ushort count);
             for (int i = 0; i < count; i++)
             {
-                var entry = DeserializeTagCountEntry(reader);
-                _list.Add(entry);
+                TagCountEntry entry = DeserializeTagCountEntry(reader);
+                if (!entry.Tag.IsValid || entry.Tag.IsNone || entry.Count <= 0)
+                {
+                    continue;
+                }
+
+                if (_cachedTagCounts.TryGetValue(entry.Tag, out int existingCount))
+                {
+                    _cachedTagCounts[entry.Tag] = existingCount + entry.Count;
+                }
+                else
+                {
+                    _cachedTagCounts[entry.Tag] = entry.Count;
+                }
             }
-            SyncCacheFromList();
+
+            RebuildImplicitCacheFromExplicit();
         }
 
         public override void ReadDelta(FastBufferReader reader, bool keepDirtyDelta)
         {
             // keepDirtyDelta는 서버에서만 true로 설정됨
-            var isServer = keepDirtyDelta;
+            bool isServer = keepDirtyDelta;
             reader.ReadValueSafe(out ushort deltaCount);
-            
+
             for (int i = 0; i < deltaCount; i++)
             {
                 reader.ReadValueSafe(out EventType eventType);
-                
+
                 switch (eventType)
                 {
                     case EventType.Add:
-                        {
-                            var value = DeserializeTagCountEntry(reader);
-                            _list.Add(value);
-
-                            var changeEvent = new ListEvent
-                            {
-                                Type = eventType,
-                                Index = _list.Count - 1,
-                                Value = value
-                            };
-
-                            OnListEventOccurred(changeEvent);
-
-                            if (isServer)
-                            {
-                                _dirtyEvents.Add(changeEvent);
-                            }
-                        }
-                        break;
-
                     case EventType.Remove:
-                        {
-                            var value = DeserializeTagCountEntry(reader);
-                            int index = FindEntryIndex(value.Tag);
-                            if (index >= 0)
-                            {
-                                _list.RemoveAt(index);
-
-                                var changeEvent = new ListEvent
-                                {
-                                    Type = eventType,
-                                    Index = index,
-                                    Value = value
-                                };
-
-                                OnListEventOccurred(changeEvent);
-
-                                if (isServer)
-                                {
-                                    _dirtyEvents.Add(changeEvent);
-                                }
-                            }
-                        }
-                        break;
-
                     case EventType.Value:
+                    {
+                        TagCountEntry value = DeserializeTagCountEntry(reader);
+                        var changeEvent = new ListEvent
                         {
-                            reader.ReadValueSafe(out int index);
-                            var value = DeserializeTagCountEntry(reader);
-                            
-                            if (index >= 0 && index < _list.Count)
-                            {
-                                _list[index] = value;
+                            Type = eventType,
+                            Index = -1,
+                            Value = value
+                        };
 
-                                var changeEvent = new ListEvent
-                                {
-                                    Type = eventType,
-                                    Index = index,
-                                    Value = value
-                                };
+                        OnListEventOccurred(changeEvent);
 
-                                OnListEventOccurred(changeEvent);
-
-                                if (isServer)
-                                {
-                                    _dirtyEvents.Add(changeEvent);
-                                }
-                            }
+                        if (isServer)
+                        {
+                            _dirtyEvents.Add(changeEvent);
                         }
+
                         break;
+                    }
 
                     case EventType.Clear:
+                    {
+                        var changeEvent = new ListEvent
                         {
-                            _list.Clear();
+                            Type = eventType,
+                            Index = -1,
+                            Value = default
+                        };
 
-                            var changeEvent = new ListEvent
-                            {
-                                Type = eventType,
-                                Index = -1,
-                                Value = default
-                            };
+                        OnListEventOccurred(changeEvent);
 
-                            OnListEventOccurred(changeEvent);
-
-                            if (isServer)
-                            {
-                                _dirtyEvents.Add(changeEvent);
-                            }
+                        if (isServer)
+                        {
+                            _dirtyEvents.Add(changeEvent);
                         }
+
                         break;
+                    }
 
                     case EventType.Full:
+                    {
+                        ReadField(reader);
+
+                        var changeEvent = new ListEvent
                         {
-                            ReadField(reader);
+                            Type = eventType,
+                            Index = -1,
+                            Value = default
+                        };
 
-                            var changeEvent = new ListEvent
-                            {
-                                Type = eventType,
-                                Index = -1,
-                                Value = default
-                            };
-
-                            OnListEventOccurred(changeEvent);
-                        }
+                        OnListEventOccurred(changeEvent);
                         break;
+                    }
                 }
             }
 
@@ -707,7 +843,7 @@ namespace Machamy.GameplayTags.Runtime.Netcode
 
         private void SerializeTagCountEntry(FastBufferWriter writer, TagCountEntry entry)
         {
-            writer.WriteValueSafe(entry.Tag.RawTagId);
+            writer.WriteValueSafe(entry.Tag.InternalTagID);
             writer.WriteValueSafe(entry.Count);
         }
 

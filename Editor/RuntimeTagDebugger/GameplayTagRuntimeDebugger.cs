@@ -30,9 +30,16 @@ namespace Machamy.GameplayTags.Editor
         private Button _idSortButton;
         private Button _stringSortButton;
         private Button _treeModeButton;
+        
         private TextField _requestTagField;
         private Button _requestTagButton;
         private Label _requestResultLabel;
+        
+        private Label _registerTitle;
+        private TextField _registerTagField;
+        private Button _registerTagButton;
+        private Label _registerResultLabel;
+        
         private ScrollView _contentArea;
         private VisualElement _warningContainer;
         private VisualElement _mainContent;
@@ -45,6 +52,16 @@ namespace Machamy.GameplayTags.Editor
         private string _searchQuery = "";
         private const float RefreshInterval = 0.5f;
         private double _lastRefreshTime;
+        
+        // 태그 변경 감지를 위한 캐시
+        private int _lastTagCount = -1;
+        private int _lastTagHash = -1;
+        
+        // 트리 접기 상태 저장
+        private Dictionary<string, bool> _foldoutStates = new Dictionary<string, bool>();
+        
+        // 검색 필드 이벤트 등록 플래그
+        private bool _searchFieldEventRegistered;
 
         [MenuItem("Tools/Gameplay Tags/Runtime Debugger")]
         public static void ShowWindow()
@@ -120,24 +137,30 @@ namespace Machamy.GameplayTags.Editor
             _searchField = root.Q<TextField>("search-field");
             _statusLabel = root.Q<Label>("status-label");
             _contentArea = root.Q<ScrollView>("content-area");
+            
             _requestTitle = root.Q<Label>("request-title");
             _requestTagField = root.Q<TextField>("request-field");
             _requestTagButton = root.Q<Button>("btn-request-tag");
             _requestResultLabel = root.Q<Label>("request-result");
+            
+            _registerTitle = root.Q<Label>("register-title");
+            _registerTagField = root.Q<TextField>("register-field");
+            _registerTagButton = root.Q<Button>("btn-register-tag");
+            _registerResultLabel = root.Q<Label>("register-result");
 
-            // 이벤트 핸들러 설정
-            SetupEventHandlers();
-
-            // 플레이 모드 체크
+            // 플레이 모드 체크 
             UpdatePlayModeUI();
             
-            // 로컬라이제이션 적용
+            SetupEventHandlers();
+            
             UpdateLocalization();
+            
+            UpdateButtonStates();
 
             // 초기 새로고침
             if (EditorApplication.isPlaying)
             {
-                RefreshTagList();
+                EditorApplication.delayCall += RefreshTagList;
             }
         }
 
@@ -152,10 +175,19 @@ namespace Machamy.GameplayTags.Editor
             if (_treeModeButton != null)
                 _treeModeButton.clicked += () => SetViewMode(ViewMode.TreeMode);
 
-            if (_searchField != null)
+            // 검색 필드 이벤트는 한 번만 등록
+            if (_searchField != null && !_searchFieldEventRegistered)
             {
+                _searchFieldEventRegistered = true;
                 _searchField.RegisterValueChangedCallback(evt =>
                 {
+                    if (string.IsNullOrEmpty(evt.newValue) || 
+                        evt.newValue == evt.previousValue ||
+                        evt.newValue.StartsWith("🔍"))
+                    {
+                        return;
+                    }
+                    
                     _searchQuery = evt.newValue.ToLower();
                     RefreshTagList();
                 });
@@ -163,6 +195,8 @@ namespace Machamy.GameplayTags.Editor
 
             if (_requestTagButton != null)
                 _requestTagButton.clicked += OnRequestTag;
+            
+            if (_registerTagButton != null) _registerTagButton.clicked += OnRegisterTag;
         }
 
         private void UpdatePlayModeUI()
@@ -211,16 +245,25 @@ namespace Machamy.GameplayTags.Editor
                 _treeModeButton.text = GameplayTagEditorLocalization.Get("debugger.viewTreeMode");
 
             if (_searchField != null)
+            {
                 _searchField.label = GameplayTagEditorLocalization.Get("debugger.search");
+                // value는 건드리지 않음 (이벤트 발생 방지)
+            }
 
             if (_requestTitle != null)
                 _requestTitle.text = GameplayTagEditorLocalization.Get("debugger.requestTitle");
-
-            if (_requestTagField != null)
-                _requestTagField.value = GameplayTagEditorLocalization.Get("debugger.requestPlaceholder");
-
+            
             if (_requestTagButton != null)
                 _requestTagButton.text = GameplayTagEditorLocalization.Get("debugger.requestButton");
+            
+            string regTitle = GameplayTagEditorLocalization.Get("debugger.registerTitle");
+            if (string.IsNullOrEmpty(regTitle) || regTitle.StartsWith("Key not found")) regTitle = "➕ Register New Tag";
+            
+            string regBtn = GameplayTagEditorLocalization.Get("debugger.registerButton");
+            if (string.IsNullOrEmpty(regBtn) || regBtn.StartsWith("Key not found")) regBtn = "Add Tag";
+
+            if (_registerTitle != null) _registerTitle.text = regTitle;
+            if (_registerTagButton != null) _registerTagButton.text = regBtn;
         }
 
         private void SetViewMode(ViewMode mode)
@@ -258,9 +301,9 @@ namespace Machamy.GameplayTags.Editor
                 return;
             }
 
-            string tagString = _requestTagField.value;
-            if (string.IsNullOrWhiteSpace(tagString) || 
-                tagString == GameplayTagEditorLocalization.Get("debugger.requestPlaceholder"))
+            string input = _requestTagField.value?.Trim();
+            if (string.IsNullOrWhiteSpace(input) || 
+                input == GameplayTagEditorLocalization.Get("debugger.requestPlaceholder"))
             {
                 _requestResultLabel.text = GameplayTagEditorLocalization.Get("debugger.requestEmptyField");
                 _requestResultLabel.style.color = Color.red;
@@ -269,15 +312,33 @@ namespace Machamy.GameplayTags.Editor
 
             try
             {
-                var tag = GameplayTagManager.RequestTag(tagString);
-                if (tag.IsValid)
+                // 숫자만 입력된 경우 ID로 검색
+                if (int.TryParse(input, out int searchId))
                 {
-                    _requestResultLabel.text = GameplayTagEditorLocalization.Format("debugger.requestSuccess", tag.RawTagId, tag.TagName);
+                    var tag = FindTagById(searchId);
+                    if (tag.IsValid)
+                    {
+                        _requestResultLabel.text = GameplayTagEditorLocalization.Format("debugger.requestSuccess", tag.InternalTagID, tag.TagName);
+                        _requestResultLabel.style.color = Color.green;
+                    }
+                    else
+                    {
+                        _requestResultLabel.text = GameplayTagEditorLocalization.Format("debugger.requestNotFound", input);
+                        _requestResultLabel.style.color = Color.red;
+                    }
+                    return;
+                }
+
+                // 문자열로 검색
+                var requestedTag = GameplayTagManager.RequestTag(input);
+                if (requestedTag.IsValid)
+                {
+                    _requestResultLabel.text = GameplayTagEditorLocalization.Format("debugger.requestSuccess", requestedTag.InternalTagID, requestedTag.TagName);
                     _requestResultLabel.style.color = Color.green;
                 }
                 else
                 {
-                    _requestResultLabel.text = GameplayTagEditorLocalization.Format("debugger.requestNotFound", tagString);
+                    _requestResultLabel.text = GameplayTagEditorLocalization.Format("debugger.requestNotFound", input);
                     _requestResultLabel.style.color = Color.red;
                 }
             }
@@ -287,16 +348,126 @@ namespace Machamy.GameplayTags.Editor
                 _requestResultLabel.style.color = Color.red;
             }
         }
+        private void OnRegisterTag()
+        {
+            if (!EditorApplication.isPlaying)
+            {
+                _registerResultLabel.text = "Play Mode Only";
+                _registerResultLabel.style.color = Color.red;
+                return;
+            }
+
+            string input = _registerTagField.value?.Trim();
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                _registerResultLabel.text = "Enter tag name";
+                _registerResultLabel.style.color = Color.red;
+                return;
+            }
+
+            // 이미 존재하는지 확인
+            if (GameplayTagManager.TryRequestTag(input, out var existingTag))
+            {
+                _registerResultLabel.text = $"Already exists (ID: {existingTag.InternalTagID})";
+                _registerResultLabel.style.color = new Color(1f, 0.5f, 0f); // Orange
+                return;
+            }
+
+            try
+            {
+                // 부모 태그까지 포함하여 안전하게 등록
+                bool success = GameplayTagManager.RegisterDynamicTagIncludeParentTags(input);
+
+                if (success)
+                {
+                    // 새로 생성된 태그 정보 가져오기
+                    GameplayTag newTag = GameplayTagManager.RequestTag(input);
+                    _registerResultLabel.text = $"Success! ID: {newTag.InternalTagID}";
+                    _registerResultLabel.style.color = Color.green;
+                    
+                    // 입력 필드 초기화
+                    _registerTagField.value = "";
+                    
+                    // 리스트 즉시 갱신
+                    RefreshTagList();
+                }
+                else
+                {
+                    _registerResultLabel.text = "Failed to register";
+                    _registerResultLabel.style.color = Color.red;
+                }
+            }
+            catch (Exception ex)
+            {
+                _registerResultLabel.text = $"Error: {ex.Message}";
+                _registerResultLabel.style.color = Color.red;
+            }
+        }
+        
+        /// <summary>
+        /// ID로 태그를 검색합니다.
+        /// </summary>
+        private GameplayTag FindTagById(int tagId)
+        {
+            return GameplayTagManager.GetTagByID(tagId);
+        }
 
         private void Update()
         {
             if (!EditorApplication.isPlaying)
                 return;
 
-            // 주기적으로 새로고침
+            // 주기적으로 태그 변경 여부만 체크
             if (EditorApplication.timeSinceStartup - _lastRefreshTime > RefreshInterval)
             {
+                CheckAndRefreshIfChanged();
+            }
+        }
+
+        /// <summary>
+        /// 태그가 변경되었는지 체크하고, 변경되었으면 새로고침
+        /// </summary>
+        private void CheckAndRefreshIfChanged()
+        {
+            if (!EditorApplication.isPlaying || _contentArea == null)
+                return;
+
+            _lastRefreshTime = EditorApplication.timeSinceStartup;
+
+            var allTagsSpan = GameplayTagManager.GetAllTags();
+            int currentTagCount = allTagsSpan.Count;
+
+            // 태그 개수가 변경되었는지 체크
+            if (_lastTagCount != currentTagCount)
+            {
+                _lastTagCount = currentTagCount;
                 RefreshTagList();
+                return;
+            }
+
+            // 태그 개수가 같으면 내용이 변경되었는지 해시로 체크
+            int currentHash = CalculateTagHash(allTagsSpan);
+            if (_lastTagHash != currentHash)
+            {
+                _lastTagHash = currentHash;
+                RefreshTagList();
+            }
+        }
+
+        /// <summary>
+        /// 태그 목록의 해시를 계산하여 변경 여부를 빠르게 확인
+        /// </summary>
+        private int CalculateTagHash(IReadOnlyList<GameplayTag> tags)
+        {
+            unchecked
+            {
+                int hash = 17;
+                foreach (var tag in tags)
+                {
+                    hash = hash * 31 + tag.InternalTagID;
+                    hash = hash * 31 + (tag.TagName?.GetHashCode() ?? 0);
+                }
+                return hash;
             }
         }
 
@@ -305,10 +476,13 @@ namespace Machamy.GameplayTags.Editor
             if (!EditorApplication.isPlaying)
                 return;
 
-            _lastRefreshTime = EditorApplication.timeSinceStartup;
-            _contentArea?.Clear();
+            // UI 요소가 준비되지 않았으면 리턴
+            if (_contentArea == null)
+                return;
 
-            ReadOnlySpan<GameplayTag> allTagsSpan = GameplayTagManager.GetAllTags();
+            _contentArea.Clear();
+
+            var allTagsSpan = GameplayTagManager.GetAllTags();
             List<GameplayTag> allTags = new List<GameplayTag>(allTagsSpan.ToArray());
             
             if (allTags.Count == 0)
@@ -324,7 +498,7 @@ namespace Machamy.GameplayTags.Editor
             {
                 filteredTags = allTags.Where(tag => 
                     tag.TagName.ToLower().Contains(_searchQuery) || 
-                    tag.RawTagId.ToString().Contains(_searchQuery)
+                    tag.InternalTagID.ToString().Contains(_searchQuery)
                 ).ToList();
             }
 
@@ -348,7 +522,7 @@ namespace Machamy.GameplayTags.Editor
 
         private void DisplayIdSorted(List<GameplayTag> tags)
         {
-            var sortedTags = tags.OrderBy(t => t.RawTagId).ToList();
+            var sortedTags = tags.OrderBy(t => t.InternalTagID).ToList();
 
             foreach (var tag in sortedTags)
             {
@@ -430,15 +604,26 @@ namespace Machamy.GameplayTags.Editor
             {
                 var foldout = new Foldout();
                 foldout.text = node.Tag.IsValid 
-                    ? $"{node.Name} [ID: {node.Tag.RawTagId}]" 
+                    ? $"{node.Name} [ID: {node.Tag.InternalTagID}]" 
                     : node.Name;
-                foldout.value = true;
+                
+                // 이전 접기 상태 복원 (기본값: true)
+                foldout.value = _foldoutStates.ContainsKey(node.FullPath) 
+                    ? _foldoutStates[node.FullPath] 
+                    : true;
+                
                 foldout.AddToClassList("tree-foldout");
 
                 if (node.Tag.IsValid)
                 {
                     foldout.AddToClassList("tree-node-label-bold");
                 }
+
+                // 접기 상태 변경 이벤트 등록
+                foldout.RegisterValueChangedCallback(evt => 
+                {
+                    _foldoutStates[node.FullPath] = evt.newValue;
+                });
 
                 parent.Add(foldout);
 
@@ -450,7 +635,7 @@ namespace Machamy.GameplayTags.Editor
             else
             {
                 var label = new Label(node.Tag.IsValid 
-                    ? $"• {node.Name} [ID: {node.Tag.RawTagId}]" 
+                    ? $"• {node.Name} [ID: {node.Tag.InternalTagID}]" 
                     : $"• {node.Name}");
                 label.AddToClassList("tree-node-label");
                 
@@ -469,7 +654,7 @@ namespace Machamy.GameplayTags.Editor
             container.AddToClassList("tag-item");
 
             // ID 라벨
-            var idLabel = new Label($"ID: {tag.RawTagId}");
+            var idLabel = new Label($"ID: {tag.InternalTagID}");
             idLabel.AddToClassList("tag-id");
             container.Add(idLabel);
 

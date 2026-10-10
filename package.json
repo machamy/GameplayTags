@@ -1,0 +1,16 @@
+{
+  "name": "com.machamy.gameplaytags",
+  "version": "1.0.0",
+  "displayName": "Machamy Gameplay Tags",
+  "description": "GAS 스타일 계층형 게임플레이 태그 런타임, 에디터, 코드 생성기, Netcode 확장",
+  "unity": "6000.3",
+  "author": { "name": "Machamy", "url": "https://github.com/machamy" },
+  "license": "MIT",
+  "dependencies": {
+    "com.unity.netcode.gameobjects": "2.8.0",
+    "com.unity.collections": "2.6.2"
+  },
+  "samples": [
+    { "displayName": "Example", "description": "GameplayTags 사용 예제", "path": "Samples~/Example" }
+  ]
+}

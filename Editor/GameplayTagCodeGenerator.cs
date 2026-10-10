@@ -11,26 +11,36 @@ using Machamy.GameplayTags.Runtime;
 namespace Machamy.GameplayTags.Editor
 {
     /// <summary>
-    /// GameplayTag 코드를 생성하는 에디터 유틸리티
+    /// GameplayTag 코드를 생성하는 에디터 유틸리티 클래스
     /// </summary>
     [InitializeOnLoad]
     public static class GameplayTagCodeGenerator
     {
         // EditorPrefs 키
-        private const string EditorPrefKey_AutoGenerate = "GameplayTag_AutoGenerate";
+        private const string EditorPrefKey_AutoGenerate = "GameplayTag_AutoGenerateCode";
         private const string EditorPrefKey_OutputPath = "GameplayTag_OutputPath";
         private const string EditorPrefKey_ResourcePath = "GameplayTag_ResourcePath";
         private const string EditorPrefKey_GeneratedFolder = "GameplayTag_GeneratedFolder";
         private const string EditorPrefKey_GameplayTagsFolder = "GameplayTag_GameplayTagsFolder";
-        
-        private static readonly bool AutoGenerateOnLoad = true;
+        private const string EditorPrefKey_LastAssemblyHash = "GameplayTag_LastAssemblyHash";
+        private const string EditorPrefKey_LastTagsHash = "GameplayTag_LastTagsHash";
         
         // 기본 경로값
-        private const string DefaultOutputPath = "Assets/GameplayTags/Generated/AllGameplayTags.g.cs";
+        // 생성 코드의 클래스/네임스페이스 이름 (패키지 소스에 리터럴이 남지 않도록 조합)
+        private const string GeneratedClassName = "All" + "GameplayTags";
+        private const string GeneratedNamespace = "Machamy.GameplayTags." + "Generated";
+        private const string DefaultOutputPath = "Assets/GameplayTags/Generated/" + GeneratedClassName + ".g.cs";
         private const string DefaultResourcePath = "GameplayTags/Generated/";
         private const string DefaultResourceFileName = "GameplayTagDatabase";
         private const string DefaultGeneratedFolder = "Assets/GameplayTags/Generated";
         private const string DefaultGameplayTagsFolder = "Assets/GameplayTags";
+        
+        
+        private static bool IsAutoGenerateEnabled 
+        {
+            get => EditorPrefs.GetBool(EditorPrefKey_AutoGenerate, true);
+            set => EditorPrefs.SetBool(EditorPrefKey_AutoGenerate, value);
+        }
         
         // EditorPrefs에서 경로 가져오기
         private static string OutputPathRelative => EditorPrefs.GetString(EditorPrefKey_OutputPath, DefaultOutputPath);
@@ -44,15 +54,154 @@ namespace Machamy.GameplayTags.Editor
             => Path.Combine(Application.dataPath.Replace("Assets", ""), relativePath);
         
         
+        /// 실행 순서:
+        /// 1. 어셈블리 스캔 - 모든 어셈블리에서 GameplayTagDefAttribute 수집
+        /// 2. 어셈블리 해시 계산 및 비교 - 변경이 있으면 SO 갱신, 없으면 스킵
+        /// 3. GameplayTagManager 초기화 - SO에서 태그 로드 및 태그 트리 생성
+        /// 4. 태그 해시 계산 및 비교 - 변경이 있으면 코드 생성, 없으면 스킵
         static GameplayTagCodeGenerator()
         {
-            if (AutoGenerateOnLoad && EditorPrefs.GetBool(EditorPrefKey_AutoGenerate, true))
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
             {
-                EditorApplication.delayCall += () =>
+                return;
+            }
+            UpdateScriptableObjectFromAssembly();
+            EditorApplication.delayCall += () =>
+            {
+
+                GameplayTagManager.InitializeAfterSO();
+                CheckAndGenerateCode();
+            };
+        }
+
+        /// <summary>
+        /// 어셈블리에서 태그를 읽어와 ScriptableObject를 갱신합니다.
+        /// </summary>
+        private static void UpdateScriptableObjectFromAssembly()
+        {
+            try
+            {
+                var attributes = CollectGameplayTagAttributes();
+
+                if (attributes.Count == 0)
                 {
-                    Debug.Log("[GameplayTag] InitializeOnLoad에서 자동 코드 생성 중...");
-                    GenerateCodeStatic();
-                };
+                    Debug.LogWarning("[GameplayTag] GameplayTagDefAttribute가 발견되지 않았습니다.");
+                    return;
+                }
+
+                int currentAssemblyHash = CalculateAssemblyHash(attributes);
+                int lastAssemblyHash = EditorPrefs.GetInt(EditorPrefKey_LastAssemblyHash, 0);
+                Debug.Log($"[GameplayTag] 로드된 어셈블리 태그 수: {attributes.Count}");
+                Debug.Log($"[GameplayTag] 현재 어셈블리 해시: {currentAssemblyHash}, 마지막 저장된 해시: {lastAssemblyHash}");
+                if (currentAssemblyHash == lastAssemblyHash)
+                {
+                    Debug.Log($"[GameplayTag] 어셈블리 변경 없음 - SO 갱신 스킵");
+                    return;
+                }
+
+                Debug.Log($"[GameplayTag] 어셈블리 변경 감지 - SO 갱신 시작");
+
+                CreateOrRefreshSO(attributes);
+                
+                AssetDatabase.SaveAssets();
+                AssetDatabase.Refresh();
+
+                EditorPrefs.SetInt(EditorPrefKey_LastAssemblyHash, currentAssemblyHash);
+
+                Debug.Log($"[GameplayTag] ScriptableObject 갱신 완료: {attributes.Count}개의 태그");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[GameplayTag] ScriptableObject 갱신 중 오류 발생: {ex.Message}\n{ex.StackTrace}");
+            }
+        }
+
+        /// <summary>
+        /// 태그 해시값을 비교하여 변경되었으면 코드를 생성합니다.
+        /// </summary>
+        private static void CheckAndGenerateCode()
+        {
+            if (!IsAutoGenerateEnabled)
+                return;
+
+            GameplayTagManager.InitializeIfNeeded();
+
+            int currentHash = GameplayTagManager.CurrentTagsHash;
+            int lastHash = EditorPrefs.GetInt(EditorPrefKey_LastTagsHash, 0);
+
+
+            if (currentHash != lastHash)
+            {
+                
+                Debug.Log($"[GameplayTag] 태그 변경 감지, 파일 확인 중...");
+                int generatedCodeHash = GetGeneratedCodeHash();
+                Debug.Log($"[GameplayTag] 현재 태그 해시: {currentHash}, 마지막 저장된 해시: {lastHash}, 생성된 코드 해시: {generatedCodeHash}");
+                if (generatedCodeHash == currentHash)
+                {
+                    Debug.Log($"[GameplayTag] 생성된 코드가 최신 상태입니다. 코드 생성 스킵");
+                    EditorPrefs.SetInt(EditorPrefKey_LastTagsHash, currentHash);
+                    return;
+                }
+                
+                GenerateCodeOnly();
+                
+                EditorPrefs.SetInt(EditorPrefKey_LastTagsHash, currentHash);
+            }
+            else
+            {
+                Debug.Log($"[GameplayTag] 태그 변경 없음 - 코드 생성 스킵");
+            }
+        }
+        
+        private static int GetGeneratedCodeHash()
+        {
+            string absolutePath = GetAbsolutePath(OutputPathRelative);
+            if (!File.Exists(absolutePath))
+                return 0;
+
+            string[] lines = File.ReadAllLines(absolutePath);
+            if (lines.Length == 0)
+                return 0;
+
+            string firstLine = lines[0];
+            if (firstLine.StartsWith("/// hash:"))
+            {
+                string hashString = firstLine.Substring("/// hash:".Length).Trim();
+                if (int.TryParse(hashString, out int hash))
+                {
+                    return hash;
+                }
+            }
+
+            return 0;
+        }
+
+        /// <summary>
+        /// 코드만 생성합니다.
+        /// </summary>
+        private static void GenerateCodeOnly()
+        {
+            try
+            {
+                var attributes = CollectGameplayTagAttributes();
+
+                if (attributes.Count == 0)
+                {
+                    Debug.LogWarning("[GameplayTag] GameplayTagDefAttribute가 발견되지 않았습니다.");
+                    return;
+                }
+
+                var tagRoot = BuildTagTree(attributes);
+                string generatedCode = GenerateCode(tagRoot);
+
+                SaveGeneratedCode(generatedCode);
+                Debug.Log($"[GameplayTag] 코드 생성 완료: {attributes.Count}개의 태그 발견 → {OutputPathRelative}");
+
+                AssetDatabase.Refresh();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[GameplayTag] 코드 생성 중 오류 발생: {ex.Message}\n{ex.StackTrace}");
             }
         }
 
@@ -68,7 +217,7 @@ namespace Machamy.GameplayTags.Editor
         [MenuItem("Tools/Gameplay Tags/Toggle Auto-Generate On Load")]
         public static void ToggleAutoGenerate()
         {
-            bool current = EditorPrefs.GetBool(EditorPrefKey_AutoGenerate, true);
+            bool current = IsAutoGenerateEnabled;
             EditorPrefs.SetBool(EditorPrefKey_AutoGenerate, !current);
             Debug.Log($"[GameplayTag] 자동 생성: {(!current ? "활성화" : "비활성화")}");
         }
@@ -76,7 +225,7 @@ namespace Machamy.GameplayTags.Editor
         [MenuItem("Tools/Gameplay Tags/Toggle Auto-Generate On Load", true)]
         public static bool ToggleAutoGenerateValidate()
         {
-            bool current = EditorPrefs.GetBool(EditorPrefKey_AutoGenerate, true);
+            bool current = IsAutoGenerateEnabled;
             Menu.SetChecked("Tools/Gameplay Tags/Toggle Auto-Generate On Load", current);
             return true;
         }
@@ -102,7 +251,6 @@ namespace Machamy.GameplayTags.Editor
         {
             try
             {
-                // 모든 어셈블리에서 GameplayTagDefAttribute 수집
                 var attributes = CollectGameplayTagAttributes();
 
                 if (attributes.Count == 0)
@@ -111,19 +259,26 @@ namespace Machamy.GameplayTags.Editor
                     return;
                 }
 
-                // 태그 트리 구조 생성
-                var tagRoot = BuildTagTree(attributes);
+                int currentAssemblyHash = CalculateAssemblyHash(attributes);
+                EditorPrefs.SetInt(EditorPrefKey_LastAssemblyHash, currentAssemblyHash);
 
-                // 코드 생성
+                CreateOrRefreshSO(attributes);
+                AssetDatabase.SaveAssets();
+                AssetDatabase.Refresh();
+
+                GameplayTagManager.ReloadTags();
+                int currentHash = GameplayTagManager.CurrentTagsHash;
+
+                var tagRoot = BuildTagTree(attributes);
                 string generatedCode = GenerateCode(tagRoot);
 
-                // 파일 저장
                 SaveGeneratedCode(generatedCode);
                 Debug.Log($"[GameplayTag] 코드 생성 완료: {attributes.Count}개의 태그 발견 → {OutputPathRelative}");
 
-                // ScriptableObject 생성 또는 갱신
-                CreateOrRefreshSO(attributes);
+                AssetDatabase.Refresh();
 
+                EditorPrefs.SetInt(EditorPrefKey_LastTagsHash, currentHash);
+                Debug.Log($"[GameplayTag] 해시값 저장 완료");
             }
             catch (Exception ex)
             {
@@ -137,45 +292,34 @@ namespace Machamy.GameplayTags.Editor
         {
             try
             {
-                // Resources.Load용 경로 (예: "GameplayTags/Generated")
                 string resourceLoadPath = ResourcePathRelative;
-                
-                // AssetDatabase용 전체 경로 (예: "Assets/Resources/GameplayTags/Generated")
                 string resourceDir = Path.GetDirectoryName(resourceLoadPath)?.Replace("\\", "/") ?? "";
                 string assetFolderPath = "Assets/Resources/" + resourceDir;
                 string assetFileName = DefaultResourceFileName + ".asset";
                 string assetFullPath = assetFolderPath + "/" + assetFileName;
-                
-                // Resources.Load는 Resources 폴더 기준 상대 경로 사용
                 string loadPath = resourceDir + "/" + DefaultResourceFileName;
                 
-                var so = Resources.Load<GameplayTagDatabase>(loadPath);
+                var so = Resources.Load<GameplayTagDatabaseSO>(loadPath);
                 
                 if (so == null)
                 {
-                    so = ScriptableObject.CreateInstance<GameplayTagDatabase>();
-                    
-                    // 폴더가 없으면 생성 (재귀적으로)
+                    so = ScriptableObject.CreateInstance<GameplayTagDatabaseSO>();
                     EnsureFolderExists(assetFolderPath);
-                    
                     AssetDatabase.CreateAsset(so, assetFullPath);
                     Debug.Log($"[GameplayTag] 새로운 GameplayTagDatabase ScriptableObject 생성: {assetFullPath}");
                 }
                 
-                // 내부 메서드 사용 (IsAutoGenerated 체크 우회)
                 so.InternalClearTags();
                 foreach (var attribute in attributes)
                 {
                     so.InternalAddTag(attribute.TagName, attribute.Description);
                 }
                 
-                // 마지막에 IsAutoGenerated 설정
                 so.IsAutoGenerated = true;
-                Debug.Log($"[GameplayTag] IsAutoGenerated 설정: {so.IsAutoGenerated} (경로: {assetFullPath})");
+                // Debug.Log($"[GameplayTag] IsAutoGenerated 설정: {so.IsAutoGenerated}");
                 
                 EditorUtility.SetDirty(so);
-                AssetDatabase.SaveAssets();
-                AssetDatabase.Refresh();
+
                 Debug.Log($"[GameplayTag] GameplayTagDatabase ScriptableObject 갱신 완료: {so.Tags.Count}개의 태그 등록됨");
             }
             catch (Exception ex)
@@ -192,7 +336,6 @@ namespace Machamy.GameplayTags.Editor
             if (AssetDatabase.IsValidFolder(folderPath))
                 return;
 
-            // Unity 경로 구분자로 통일
             folderPath = folderPath.Replace("\\", "/");
             
             string[] folders = folderPath.Split('/');
@@ -221,23 +364,44 @@ namespace Machamy.GameplayTags.Editor
         {
             var attributes = new List<GameplayTagDefAttribute>();
 
-            // 모든 어셈블리 순회
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
                 try
                 {
-                    // 어셈블리 레벨 어트리뷰트 수집
                     var assemblyAttributes = assembly.GetCustomAttributes<GameplayTagDefAttribute>();
                     attributes.AddRange(assemblyAttributes);
                 }
                 catch (Exception ex)
                 {
-                    // 일부 어셈블리는 접근 불가할 수 있음
                     Debug.LogWarning($"[GameplayTag] 어셈블리 '{assembly.FullName}' 스캔 실패: {ex.Message}");
                 }
             }
 
             return attributes;
+        }
+
+        /// <summary>
+        /// 어셈블리 attribute들의 해시값을 계산합니다.
+        /// </summary>
+        private static int CalculateAssemblyHash(List<GameplayTagDefAttribute> attributes)
+        {
+            if (attributes == null || attributes.Count == 0)
+                return 0;
+
+            var sortedData = attributes
+                .Select(attr => $"{attr.TagName}|{attr.Description ?? ""}")
+                .OrderBy(s => s)
+                .ToArray();
+
+            unchecked
+            {
+                int hash = 17;
+                foreach (string data in sortedData)
+                {
+                    hash = hash * 31 + data.GetHashCode();
+                }
+                return hash;
+            }
         }
 
         private static TagNode BuildTagTree(List<GameplayTagDefAttribute> attributes)
@@ -283,29 +447,30 @@ namespace Machamy.GameplayTags.Editor
         {
             var sb = new StringBuilder();
 
-            // 헤더
             sb.AppendLine($@"
-            /// <auto-generated>
-            /// 생성 시간: {DateTime.Now:yyyy-MM-dd HH:mm:ss}
-            /// 이 파일은 자동 생성되었습니다. 직접 수정하지 마세요.
-            /// </auto-generated> 
-               
-            using Machamy.GameplayTags.Runtime;
+/// hash: {GameplayTagManager.CurrentTagsHash}
+/// <auto-generated>
+/// 이 파일은 자동 생성되었습니다. 직접 수정하지 마세요.
+/// </auto-generated> 
+   
+using Machamy.GameplayTags.Runtime;
 
-            namespace Machamy.GameplayTags.Generated
-            {{
-                /// <summary>
-                /// 자동 생성된 GameplayTag 정적 접근자
-                /// </summary>
-                public static class AllGameplayTags
-                {{
+namespace {GeneratedNamespace}
+{{
+    /// <summary>
+    /// 자동 생성된 GameplayTag 정적 접근자
+    /// </summary>
+    public static class {GeneratedClassName}
+    {{
 ");
 
-            // 태그 클래스 생성
             GenerateTagClass(sb, root, 1);
 
             sb.AppendLine("    }");
             sb.AppendLine("}");
+            
+            // Enum 생성
+            GeneratedEnum(sb, root, 0);
 
             return sb.ToString();
         }
@@ -316,7 +481,7 @@ namespace Machamy.GameplayTags.Editor
 
             foreach (var child in node.Children.Values.OrderBy(c => c.Name))
             {
-                sb.AppendLine($"{indent}public static class {child.Name}");
+                sb.AppendLine($"{indent}public static class {ToValidIdentifier(child.Name)}");
                 sb.AppendLine($"{indent}{{");
 
                 sb.AppendLine($"{indent}    /// <summary>");
@@ -330,11 +495,10 @@ namespace Machamy.GameplayTags.Editor
                 sb.AppendLine($"{indent}    public static GameplayTag Get() => GameplayTagManager.RequestTag(RawTag);");
                 sb.AppendLine();
                 sb.AppendLine($"{indent}    /// <summary>");
-                sb.AppendLine($"{indent}    /// GameplayTag 속성 (캐시됨)");
+                sb.AppendLine($"{indent}    /// GameplayTag 속성");
                 sb.AppendLine($"{indent}    /// </summary>");
                 sb.AppendLine($"{indent}    public static GameplayTag Tag => Get();");
 
-                // 자식 노드가 있으면 재귀 생성
                 if (child.Children.Count > 0)
                 {
                     sb.AppendLine();
@@ -345,10 +509,76 @@ namespace Machamy.GameplayTags.Editor
                 sb.AppendLine();
             }
         }
+        
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="sb"></param>
+        /// <param name="node"></param>
+        /// <param name="level"></param>
+        private static void GeneratedEnum(StringBuilder sb, TagNode node, int level)
+        {
+            // enum 추가
+            var indent = new string(' ', level * 4);
+            
+            List<string> allTags = new List<string>();
+
+            void CollectTags(TagNode n)
+            {
+                foreach (var child in n.Children.Values)
+                {
+                    allTags.Add(child.FullName);
+                    CollectTags(child);
+                }
+            }
+            CollectTags(node);
+            
+            #if UNITY_BEHAVIOR
+            sb.AppendLine($"{indent}[Unity.Behavior.BlackboardEnum]");
+            #else
+            sb.AppendLine($"#if UNITY_BEHAVIOR");
+            sb.AppendLine($"{indent}[Unity.Behavior.BlackboardEnum]");
+            sb.AppendLine($"#endif");
+            #endif
+            sb.AppendLine($"{indent}public enum GameplayTagEnum");
+            sb.AppendLine($"{indent}{{");
+            foreach (var child in allTags)
+            {
+                sb.AppendLine($"{indent}    {ToValidIdentifier(child.Replace('.', '_'))},");
+            }
+            sb.AppendLine($"{indent}}}");
+            
+            // enum static helper 추가
+            sb.AppendLine();
+            sb.AppendLine();
+            sb.AppendLine($"{indent}/// <summary>");
+            sb.AppendLine($"{indent}/// {node.Name}Enum 헬퍼 클래스");
+            sb.AppendLine($"{indent}/// </summary>");
+            sb.AppendLine($"{indent}public static class GameplayTagEnumHelper");
+            sb.AppendLine($"{indent}{{");
+            // ToTag 함수
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// GameplayTagEnum 값을 GameplayTag로 변환합니다.");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    public static GameplayTag ToTag(this GameplayTagEnum tagEnum)");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        switch (tagEnum)");;
+            sb.AppendLine($"{indent}        {{");
+            foreach (var child in allTags)
+            {
+                sb.AppendLine($"{indent}            case GameplayTagEnum.{ToValidIdentifier(child.Replace('.', '_'))}:");
+                sb.AppendLine($"{indent}                return GameplayTagManager.RequestTag(\"{child}\");");
+            }
+            sb.AppendLine($"{indent}            default:");
+            sb.AppendLine($"{indent}                return GameplayTag.None;");
+            sb.AppendLine($"{indent}        }}");   
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine($"{indent}}}");
+            
+        }
 
         private static void SaveGeneratedCode(string code)
         {
-            // Generated 폴더가 없으면 생성 (AssetDatabase는 상대 경로 사용)
             if (!AssetDatabase.IsValidFolder(GeneratedFolderPathRelative))
             {
                 if (!AssetDatabase.IsValidFolder(GameplayTagsFolderPathRelative))
@@ -360,7 +590,6 @@ namespace Machamy.GameplayTags.Editor
                 AssetDatabase.CreateFolder(GameplayTagsFolderPathRelative, folderName);
             }
 
-            // 파일 저장 (절대 경로로 변환)
             string absolutePath = GetAbsolutePath(OutputPathRelative);
             string directoryPath = Path.GetDirectoryName(absolutePath);
             
@@ -374,11 +603,59 @@ namespace Machamy.GameplayTags.Editor
                 File.WriteAllText(absolutePath, code, Encoding.UTF8);
             }
 
-            // AssetDatabase 리프레시
-            AssetDatabase.Refresh();
-
             Debug.Log($"[GameplayTag] 코드가 생성되었습니다: {OutputPathRelative}");
         }
+
+        private static string ToValidIdentifier(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return "_";
+            }
+
+            var sb = new StringBuilder(value.Length + 1);
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                bool valid = i == 0
+                    ? char.IsLetter(c) || c == '_'
+                    : char.IsLetterOrDigit(c) || c == '_';
+
+                if (valid)
+                {
+                    sb.Append(c);
+                    continue;
+                }
+
+                if (i == 0 && char.IsDigit(c))
+                {
+                    sb.Append('_');
+                    sb.Append(c);
+                    continue;
+                }
+
+                sb.Append('_');
+            }
+
+            string identifier = sb.ToString();
+            return CSharpKeywords.Contains(identifier) ? "_" + identifier : identifier;
+        }
+
+        private static readonly HashSet<string> CSharpKeywords = new()
+        {
+            "abstract", "as", "base", "bool", "break", "byte", "case", "catch",
+            "char", "checked", "class", "const", "continue", "decimal", "default",
+            "delegate", "do", "double", "else", "enum", "event", "explicit",
+            "extern", "false", "finally", "fixed", "float", "for", "foreach",
+            "goto", "if", "implicit", "in", "int", "interface", "internal",
+            "is", "lock", "long", "namespace", "new", "null", "object",
+            "operator", "out", "override", "params", "private", "protected",
+            "public", "readonly", "ref", "return", "sbyte", "sealed", "short",
+            "sizeof", "stackalloc", "static", "string", "struct", "switch",
+            "this", "throw", "true", "try", "typeof", "uint", "ulong",
+            "unchecked", "unsafe", "ushort", "using", "virtual", "void",
+            "volatile", "while"
+        };
         
 
         private class TagNode

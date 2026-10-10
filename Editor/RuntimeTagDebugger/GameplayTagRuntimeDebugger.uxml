@@ -43,6 +43,19 @@
             </ui:VisualElement>
             <ui:Label name="request-result" text="" class="request-result" />
         </ui:VisualElement>
+        
+        <ui:VisualElement style="height: 5px;" />
+
+        <!-- 태그 등록 테스트 섹션 -->
+        <ui:VisualElement class="register-section">
+            <ui:Label name="register-title" text="➕ Register New Tag" class="request-section-title" />
+            <ui:VisualElement class="request-input-row">
+                <ui:TextField name="register-field" value="New.Tag.Name" class="request-field" />
+                <ui:Button name="btn-register-tag" text="Add Tag" class="register-button" />
+            </ui:VisualElement>
+            <ui:Label name="register-result" text="" class="request-result" />
+        </ui:VisualElement>
+        
     </ui:VisualElement>
 </ui:UXML>
 

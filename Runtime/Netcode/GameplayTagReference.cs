@@ -15,7 +15,7 @@ namespace Machamy.GameplayTags.Runtime.Netcode
         private int _tagID;
         public GameplayTagReference(GameplayTag tag)
         {
-            _tagID = tag.IsValid ? tag.RawTagId : -1;
+            _tagID = tag.IsValid ? tag.InternalTagID : -1;
         }
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
@@ -35,7 +35,7 @@ namespace Machamy.GameplayTags.Runtime.Netcode
         
         public override int GetHashCode()
         {
-            return _tagID.GetHashCode();
+            return GameplayTagManager.GetTagByID(_tagID).GetHashCode();
         }
         
         public static implicit operator GameplayTag(GameplayTagReference tagRef)
@@ -45,7 +45,7 @@ namespace Machamy.GameplayTags.Runtime.Netcode
                 return GameplayTagManager.GetTagByID(tagRef._tagID);
             }
 
-            return GameplayTagSpec.Invalid.Tag;
+            return GameplayTag.GetInvalid($"InvalidNetTagId:{tagRef._tagID}");
         }
         
         public static implicit operator GameplayTagReference(GameplayTag tag)
