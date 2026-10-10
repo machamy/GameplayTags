@@ -7,145 +7,137 @@ namespace Machamy.GameplayTags.Runtime
     /// 게임플레이 태그를 나타내는 구조체입니다.
     /// </summary>
     [Serializable]
-    public struct GameplayTag : IEquatable<GameplayTag>
+    public struct GameplayTag : IEquatable<GameplayTag>, ISerializationCallbackReceiver, IComparable<GameplayTag>, IComparable
     {
         [SerializeField] private string rawTagName;
-        [SerializeField] private int rawTagId;
 
-        // 에디터에서 아직 해결되지 않은 태그를 나타냅니다 (-10)
-        private const int UnresolvedTagId = -10;
-        
-        internal GameplayTagSpec Spec => GetResolvedSpec();
+        private GameplayTagSpec _spec;
+        private bool _isInvalid;
 
+        internal static GameplayTag GetInvalid(string tagName)
+        {
+            string trimmedTagName = tagName?.Trim() ?? string.Empty;
 
-        private int TagId
+            return new GameplayTag
+            {
+                rawTagName = trimmedTagName,
+                _spec = null,
+                _isInvalid = !string.IsNullOrEmpty(trimmedTagName)
+            };
+        }
+
+        internal GameplayTagSpec Spec
         {
             get
             {
-                if (rawTagId >= 0)
-                    return rawTagId;
-                if (rawTagId == UnresolvedTagId && !string.IsNullOrEmpty(rawTagName))
+                if (_spec != null)
                 {
-                    GameplayTag resolvedTag = GameplayTagManager.RequestTag(rawTagName);
-                    if (resolvedTag.IsValid && resolvedTag.rawTagId >= 0)
-                    {
-                        rawTagId = resolvedTag.rawTagId;
-                        return rawTagId;
-                    }
-                    else
-                    {
-                        rawTagId = -1;
-                        return rawTagId;
-                    }
+                    return _spec;
                 }
-                return -1;
+
+                if (string.IsNullOrEmpty(rawTagName))
+                {
+                    return GameplayTagSpec.None;
+                }
+
+                if (GameplayTagManager.Initialized)
+                {
+                    ResolveAgainstCurrentRegistryIfPossible();
+                    return _spec;
+                }
+                return null;
             }
         }
+        private int TagId => Spec?.RuntimeIndex ?? -1;
 
         /// <summary>
         /// None 태그를 반환합니다.
         /// </summary>
         public static GameplayTag None => GameplayTagSpec.None.Tag;
-        
-        /// <summary>
-        /// 태그가 유효한지 확인합니다.
-        /// </summary>
-        public bool IsValid => TagId >= 0;
+
 
         /// <summary>
         /// 태그가 None인지 확인합니다.
         /// </summary>
-        public bool IsNone => TagId == 0;
+        public bool IsNone => string.IsNullOrEmpty(rawTagName) || _spec == GameplayTagSpec.None;
+
+        /// <summary>
+        /// 태그가 유효한지 확인합니다.
+        /// </summary>
+        public bool IsValid
+        {
+            get
+            {
+                if (IsNone || _spec != null || !GameplayTagManager.Initialized)
+                {
+                    return !_isInvalid;
+                }
+
+                ResolveAgainstCurrentRegistryIfPossible();
+                return !_isInvalid;
+            }
+        }
+
+        public int InternalTagID => TagId;
 
         /// <summary>
         /// 태그 이름을 가져옵니다.
         /// </summary>
-        public string TagName
-        {
-            get
-            {
-                if (!IsValid)
-                    return "Invalid";
-                
-                GameplayTagSpec spec = GameplayTagManager.GetDefinitionByID(rawTagId);
-                return spec?.TagName ?? "Unknown";
-            }
-        }
-        
-        public int RawTagId => rawTagId;
-        
+        public string TagName => _isInvalid ? rawTagName : Spec?.TagName ?? rawTagName;
+
+        public string RawTagName => rawTagName;
+
         public string Description
         {
             get
             {
-                if (!IsValid)
-                    return "Invalid";
-                
+                if (_isInvalid)
+                {
+                    return "Invalid Tag";
+                }
+
                 return Spec?.Description ?? "Unknown";
             }
         }
-        
+
+        public GameplayTag ParentTag => Spec?.Parent?.Tag ?? None;
 
         internal GameplayTag(GameplayTagSpec spec)
         {
-            rawTagId = spec?.RuntimeIndex ?? -1;
             rawTagName = spec?.TagName ?? string.Empty;
+            _spec = spec;
+            _isInvalid = false;
         }
 
-        /// <summary>
-        /// 태그 Spec을 가져옵니다. 아직 해결되지 않은 경우 rawTagName으로 요청합니다.
-        /// </summary>
-        private GameplayTagSpec GetResolvedSpec()
+        internal static GameplayTag FromTagName(string tagName)
         {
-            // 이미 해결된 경우
-            if (rawTagId >= 0)
-                return GameplayTagManager.GetDefinitionByID(rawTagId);
-
-            // UnresolvedTagId인 경우 rawTagName으로 요청
-            if (rawTagId == UnresolvedTagId && !string.IsNullOrEmpty(rawTagName))
+            return new GameplayTag
             {
-                GameplayTag resolvedTag = GameplayTagManager.RequestTag(rawTagName);
-                if (resolvedTag.IsValid && resolvedTag.rawTagId >= 0)
-                {
-                    // 해결된 태그로 업데이트 (mutable struct이므로 가능)
-                    rawTagId = resolvedTag.rawTagId;
-                    return GameplayTagManager.GetDefinitionByID(rawTagId);
-                }
-                else
-                {
-                    // 해결할 수 없으면 Invalid로 설정
-                    rawTagId = -1;
-                    return null;
-                }
-            }
-
-            return null;
+                rawTagName = tagName,
+                _spec = null,
+                _isInvalid = false
+            };
         }
-        
 
         /// <summary>
         /// 이 태그가 다른 태그의 부모인지 확인합니다.
         /// </summary>
         public bool IsParentOf(GameplayTag other)
         {
-            if (!IsValid || !other.IsValid)
-                return false;
-
             GameplayTagSpec thisDef = Spec;
             GameplayTagSpec otherDef = other.Spec;
-
             return thisDef?.IsParentOf(otherDef) ?? false;
         }
 
         /// <summary>
-        /// 이 태그가 다른 태그의 자식인지 확인합니다.
+        /// 이 태그가 다른 태그의 자식인지 확인합니다
         /// </summary>
         public bool IsChildOf(GameplayTag other)
         {
             return other.IsParentOf(this);
         }
 
-        
+
         /// <summary>
         /// 다른 태그와 동일한지 확인합니다. <br/>
         /// 만약 둘 다 유효하지 않은 경우 동일하지 않음으로 간주합니다.
@@ -154,10 +146,17 @@ namespace Machamy.GameplayTags.Runtime
         /// <returns></returns>
         public bool Equals(GameplayTag other)
         {
-            // 둘 다 유효하지 않은 경우 동일하지 않음
-            if (!IsValid && !other.IsValid)
-                return false;
-            return TagId == other.TagId;
+            if (IsNone && other.IsNone)
+            {
+                return true;
+            }
+
+            if (TryGetComparableId(out int leftId) && other.TryGetComparableId(out int rightId))
+            {
+                return leftId == rightId;
+            }
+
+            return string.Equals(rawTagName, other.rawTagName, StringComparison.Ordinal);
         }
 
         public override bool Equals(object obj)
@@ -167,17 +166,59 @@ namespace Machamy.GameplayTags.Runtime
 
         public override int GetHashCode()
         {
-            // UnresolvedTagId인 경우 rawTagName의 해시코드 사용
-            if (rawTagId == UnresolvedTagId)
+            if (TryGetComparableId(out _))
             {
-                return rawTagName?.GetHashCode() ?? 0;
+                return Spec.GetHashCode();
             }
-            return rawTagId;
+            return rawTagName != null ? rawTagName.GetHashCode() : 0;
+        }
+
+
+        public void OnBeforeSerialize()
+        {
+            rawTagName = rawTagName?.Trim() ?? string.Empty;
+            if (string.IsNullOrEmpty(rawTagName) || _spec == GameplayTagSpec.None)
+            {
+                rawTagName = string.Empty;
+            }
+            else if (!_isInvalid && _spec != null)
+            {
+                rawTagName = TagName;
+            }
+        }
+
+        public void OnAfterDeserialize()
+        {
+            if (string.IsNullOrEmpty(rawTagName))
+            {
+                this = None;
+            }
+            else
+            {
+                if (GameplayTagManager.Initialized)
+                {
+                    ResolveAgainstCurrentRegistryIfPossible();
+                }
+                else
+                {
+                    _spec = null;
+                    _isInvalid = false;
+                }
+            }
         }
 
         public override string ToString()
         {
             return TagName;
+        }
+
+        public int CompareTo(object obj)
+        {
+            if (obj is GameplayTag other)
+            {
+                return CompareTo(other);
+            }
+            throw new ArgumentException("Object is not a GameplayTag");
         }
 
         public static bool operator ==(GameplayTag left, GameplayTag right)
@@ -188,6 +229,53 @@ namespace Machamy.GameplayTags.Runtime
         public static bool operator !=(GameplayTag left, GameplayTag right)
         {
             return !left.Equals(right);
+        }
+
+
+        public int CompareTo(GameplayTag other)
+        {
+            if (TryGetComparableId(out _) && other.TryGetComparableId(out _))
+            {
+                return Spec.CompareTo(other.Spec);
+            }
+
+            return string.Compare(rawTagName, other.rawTagName, StringComparison.Ordinal);
+        }
+
+        public bool IsValidName()
+        {
+            return GameplayTagManager.IsValidTagName(rawTagName);
+        }
+
+        private bool TryGetComparableId(out int tagId)
+        {
+            if (IsNone)
+            {
+                tagId = 0;
+                return false;
+            }
+
+            GameplayTagSpec spec = Spec;
+            if (spec != null)
+            {
+                tagId = spec.RuntimeIndex;
+                return true;
+            }
+
+            tagId = -1;
+            return false;
+        }
+
+        private void ResolveAgainstCurrentRegistryIfPossible()
+        {
+            if (string.IsNullOrEmpty(rawTagName) || !GameplayTagManager.Initialized)
+            {
+                return;
+            }
+
+            GameplayTag resolvedTag = GameplayTagManager.RequestTag(rawTagName);
+            _spec = resolvedTag._spec;
+            _isInvalid = resolvedTag._isInvalid;
         }
     }
 }

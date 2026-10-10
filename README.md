@@ -29,6 +29,27 @@ Gameplay Tags are **hierarchical string-based identifiers** that provide a flexi
 
 ---
 
+## Installation
+
+This repository is a Unity package (UPM). In Unity 6000.3 or later, add it to `Packages/manifest.json`:
+
+```json
+"com.machamy.gameplaytags": "https://github.com/machamy/GameplayTags.git"
+```
+
+Pin a version by appending a tag or commit, e.g. `...GameplayTags.git#<tag>`.
+Dependencies (`com.unity.netcode.gameobjects` 2.8.0, `com.unity.collections` 2.6.2) are installed automatically from `package.json`.
+The Netcode extension (`Machamy.GameplayTags.Runtime.Netcode`) compiles only when NGO is present (`GAMEPLAYTAGS_USE_NETCODE`).
+
+### Notes
+
+* **A tag database must exist before you build a player.** At runtime only the tag database under `Resources` is read. Create one via `Assets/Create/Gameplay Tags/Tag Database` (or the editor window); assembly attribute changes are written to the database on script reload. Make sure the database under `Resources/GameplayTags/Generated` is up to date before building.
+* Calling `RequestTag` for the first time from a MonoBehaviour constructor or field initializer may return an invalid tag because initialization is deferred by Unity (a warning is logged and the tag resolves later). Prefer requesting tags from `Awake`/`Start` onward.
+* Identical duplicate registrations (for example the same database loaded twice) are ignored; a tag registered twice with different descriptions is reported as an error.
+* The `Example` sample (Package Manager → Samples) is gated by the `GAMEPLAYTAGS_EXAMPLE` define. Add it to Scripting Define Symbols after importing the sample.
+
+---
+
 ## Getting Started
 
 Before you can use tags, you first need to **create them**. There are three main ways to register tags in your project:
@@ -257,7 +278,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-See the [LICENSE](License.md) file for details.
+See the [LICENSE](LICENSE.md) file for details.
 
 ### Attribution Notice (Original Work)
 

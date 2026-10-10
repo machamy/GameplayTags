@@ -272,9 +272,11 @@ namespace Machamy.GameplayTags.Editor
                 "debugger.viewStringSort" => "🔤 Sort by String",
                 "debugger.viewTreeMode" => "🌲 Tree Mode",
                 "debugger.search" => "🔍 Search",
+                
                 "debugger.statusLoading" => "Loading tags...",
                 "debugger.statusEmpty" => "No tags registered.",
                 "debugger.statusCount" => "Total {0} tags (Search results: {1})",
+                
                 "debugger.requestTitle" => "🔍 Tag Request Test",
                 "debugger.requestPlaceholder" => "e.g., Player.Health.Max",
                 "debugger.requestButton" => "Request Tag",
@@ -283,6 +285,14 @@ namespace Machamy.GameplayTags.Editor
                 "debugger.requestError" => "❌ Error: {0}",
                 "debugger.requestEmptyField" => "❌ Please enter a tag string.",
                 "debugger.requestPlayModeOnly" => "❌ Only available in Play Mode.",
+                
+                "debugger.registerTitle" => "➕ Register New Tag",
+                "debugger.registerButton" => "Add Tag",
+                "debugger.registerSuccess" => "✅ Tag Registered: ID={0}",
+                "debugger.registerExists" => "⚠️ Tag already exists (ID: {0})",
+                "debugger.registerFailed" => "❌ Failed to register tag",
+                "debugger.registerEmpty" => "❌ Please enter a tag name.",
+                
                 "debugger.tagCopied" => "Tag copied: {0}",
                 "debugger.openButton" => "🎮 Runtime Debugger",
 

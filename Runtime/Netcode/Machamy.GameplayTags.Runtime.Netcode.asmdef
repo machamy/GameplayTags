@@ -4,7 +4,7 @@
     "references": [
         "Machamy.GameplayTags.Runtime",
         "Unity.Netcode.Runtime",
-        "Unity.Multiplayer.Center.NetcodeForGameObjectsExample"
+        "Unity.Collections"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -12,7 +12,9 @@
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
-    "defineConstraints": [],
+    "defineConstraints": [
+        "GAMEPLAYTAGS_USE_NETCODE"
+    ],
     "versionDefines": [
         {
             "name": "com.unity.netcode.gameobjects",

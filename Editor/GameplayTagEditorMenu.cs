@@ -30,19 +30,19 @@ namespace Machamy.GameplayTags.Editor
             }
 
             // 데이터베이스 생성
-            Runtime.GameplayTagDatabase database = ScriptableObject.CreateInstance<Runtime.GameplayTagDatabase>();
+            Runtime.GameplayTagDatabaseSO databaseSo = ScriptableObject.CreateInstance<Runtime.GameplayTagDatabaseSO>();
 
             // 고유한 파일 이름 생성
             string assetPath = AssetDatabase.GenerateUniqueAssetPath(
                 $"{ResourcesFolderPath}/{DefaultDatabaseName}.asset");
 
             // 에셋 생성
-            AssetDatabase.CreateAsset(database, assetPath);
+            AssetDatabase.CreateAsset(databaseSo, assetPath);
             AssetDatabase.SaveAssets();
 
             // 생성된 에셋 선택 및 포커스
             EditorUtility.FocusProjectWindow();
-            Selection.activeObject = database;
+            Selection.activeObject = databaseSo;
 
             Debug.Log($"[GameplayTag] 데이터베이스 생성됨: {assetPath}");
         }
@@ -81,14 +81,14 @@ namespace Machamy.GameplayTags.Editor
         {
             var tags = Runtime.GameplayTagManager.GetAllTags();
             
-            if (tags.Length == 0)
+            if (tags.Count == 0)
             {
                 Debug.Log("[GameplayTag] 등록된 태그가 없습니다.");
                 return;
             }
 
             System.Text.StringBuilder sb = new System.Text.StringBuilder();
-            sb.AppendLine($"=== 등록된 게임플레이 태그 ({tags.Length}개) ===");
+            sb.AppendLine($"=== 등록된 게임플레이 태그 ({tags.Count}개) ===");
             
             foreach (var tag in tags)
             {
@@ -102,7 +102,7 @@ namespace Machamy.GameplayTags.Editor
         public static void ValidateResourcesDatabases()
         {
             // Resources 폴더의 모든 GameplayTagDatabase 찾기
-            var databases = Resources.LoadAll<Runtime.GameplayTagDatabase>("");
+            var databases = Resources.LoadAll<Runtime.GameplayTagDatabaseSO>("");
 
             if (databases.Length == 0)
             {

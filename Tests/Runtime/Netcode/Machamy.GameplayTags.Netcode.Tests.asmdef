@@ -1,0 +1,31 @@
+{
+    "name": "Machamy.GameplayTags.Netcode.Tests",
+    "rootNamespace": "",
+    "references": [
+        "Unity.Networking.Transport",
+        "Machamy.GameplayTags.Runtime",
+        "Machamy.GameplayTags.Runtime.Netcode",
+        "Unity.Netcode.Runtime",
+        "UnityEngine.TestRunner"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "GAMEPLAYTAGS_USE_NETCODE"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.netcode.gameobjects",
+            "expression": "",
+            "define": "GAMEPLAYTAGS_USE_NETCODE"
+        }
+    ],
+    "noEngineReferences": false
+}

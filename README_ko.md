@@ -27,6 +27,27 @@ Gameplay Tag는 **계층 구조를 가진 문자열 기반 식별자 시스템**
 
 ---
 
+## 설치
+
+이 저장소는 Unity 패키지(UPM)입니다. Unity 6000.3 이상에서 `Packages/manifest.json`에 추가합니다.
+
+```json
+"com.machamy.gameplaytags": "https://github.com/machamy/GameplayTags.git"
+```
+
+버전을 고정하려면 끝에 태그나 커밋을 붙입니다. 예: `...GameplayTags.git#<tag>`.
+의존 패키지(`com.unity.netcode.gameobjects` 2.8.0, `com.unity.collections` 2.6.2)는 `package.json`에 따라 자동으로 설치됩니다.
+Netcode 확장(`Machamy.GameplayTags.Runtime.Netcode`)은 NGO가 있을 때만 컴파일됩니다(`GAMEPLAYTAGS_USE_NETCODE`).
+
+### 알아둘 점
+
+* **플레이어 빌드 전에 태그 데이터베이스가 있어야 합니다.** 런타임은 `Resources`의 태그 데이터베이스만 읽습니다. `Assets/Create/Gameplay Tags/Tag Database`(또는 에디터 창)로 만들고, 어셈블리 속성 변경은 스크립트 리로드 때 데이터베이스에 반영됩니다. 빌드 전에 `Resources/GameplayTags/Generated`의 데이터베이스가 최신인지 확인하세요.
+* MonoBehaviour 생성자나 필드 초기화자에서 `RequestTag`를 처음 호출하면 Unity 제약으로 초기화가 지연되어 그 시점의 태그가 유효하지 않을 수 있습니다(경고 로그가 남고 이후 다시 해석됩니다). 가능하면 `Awake`/`Start` 이후에 요청하세요.
+* 같은 정의가 두 번 등록되는 경우(같은 데이터베이스가 두 번 로드되는 경우 등)는 무시합니다. 같은 태그가 서로 다른 설명으로 등록되면 오류로 보고합니다.
+* `Example` 샘플(Package Manager → Samples)은 `GAMEPLAYTAGS_EXAMPLE` define이 있어야 컴파일됩니다. 샘플을 가져온 뒤 Scripting Define Symbols에 추가하세요.
+
+---
+
 ## 시작하기
 
 태그를 사용하기 전에 먼저 **태그를 생성**해야 합니다. 프로젝트에 태그를 등록하는 방법은 세 가지입니다:
@@ -255,7 +276,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-자세한 내용은 [LICENSE.md](License.md) 파일을 참조하세요.
+자세한 내용은 [LICENSE.md](LICENSE.md) 파일을 참조하세요.
 
 ### Attribution Notice (원본 저작물)
 

@@ -2,7 +2,7 @@
     "name": "Machamy.GameplayTags.Runtime.Editor",
     "rootNamespace": "",
     "references": [
-        "GUID:05725d43b1607504e8715e9276531854"
+        "Machamy.GameplayTags.Runtime"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -10,7 +10,9 @@
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
-    "defineConstraints": [],
+    "defineConstraints": [
+        "UNITY_EDITOR"
+    ],
     "versionDefines": [],
     "noEngineReferences": false
 }
